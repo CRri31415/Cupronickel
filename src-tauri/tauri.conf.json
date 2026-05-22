@@ -17,7 +17,7 @@
       "fs": { "all": false },
       "path": { "all": true },
       "dialog": { "open": true, "save": true },
-      "clipboard": { "readText": true, "writeText": true, "readImage": true }
+      "clipboard": { "readText": true, "writeText": true }
     },
     "windows": [
       {
