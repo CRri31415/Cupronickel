@@ -32,6 +32,7 @@ async function invoke(cmd, args) {
       a.href = args.dataUrl; a.download = args.name || "export.png"; a.click();
       return args.name || "export.png";
     }
+    case "set_window_size": return; // dev(브라우저)에선 무시
     default: throw new Error("unknown command: " + cmd);
   }
 }
@@ -47,4 +48,6 @@ export const ipc = {
   uninstallModule: (key) => invoke("uninstall_module", { key }),
   // SVG에서 만든 PNG 데이터URL을 사용자가 고른 위치에 저장(저장 대화상자).
   savePngDataUrl: (dataUrl, name) => invoke("save_png", { dataUrl, name }),
+  // 창 픽셀 크기를 지정하고 화면 중앙에 배치한다.
+  setWindowSize: (width, height) => invoke("set_window_size", { width, height }),
 };

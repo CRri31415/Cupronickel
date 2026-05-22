@@ -1,9 +1,8 @@
 <script>
-  // 설정 화면 — 모션 토글, 해상도, 테마 색/폰트, 모듈 설치/제거, 에디터 줄번호.
+  // 설정 화면 — 표시/성능, 테마, (설치된) 모듈별 설정, 모듈 설치.
   import { settings, updateSettings } from "../core/settings.js";
-  import { installed, install, uninstall, meta, allModuleKeys } from "../core/modules.js";
+  import { installed, install, meta, allModuleKeys } from "../core/modules.js";
 
-  // 테마 변수 편집용 라벨
   const COLOR_LABELS = {
     "--bg": "배경", "--surface": "패널", "--surface-2": "상위 패널",
     "--line": "경계선", "--text": "본문", "--text-dim": "보조 텍스트",
@@ -25,22 +24,15 @@
       <span>애니메이션</span>
       <input type="checkbox" checked={$settings.motion}
         on:change={(e) => updateSettings({ motion: e.target.checked })} />
-      <small>끄면 모든 전환이 즉시 처리됩니다(완전 최적화).</small>
+      <small>탭 전환·버튼 등의 부드러운 효과. 끄면 모든 전환이 즉시 처리되어 약간 더 가볍습니다.</small>
     </label>
     <label class="row">
-      <span>해상도</span>
+      <span>창 크기</span>
       <select value={$settings.resolution} on:change={(e) => updateSettings({ resolution: e.target.value })}>
         <option value="1600x900">1600 × 900</option>
         <option value="1920x1080">1920 × 1080</option>
       </select>
-    </label>
-    <label class="row">
-      <span>에디터 줄번호</span>
-      <select value={$settings.editor.lineNumbers}
-        on:change={(e) => updateSettings({ editor: { ...$settings.editor, lineNumbers: e.target.value } })}>
-        <option value="hybrid">하이브리드 상대</option>
-        <option value="absolute">절대</option>
-      </select>
+      <small>창 픽셀 크기를 고정합니다(전체화면 아님).</small>
     </label>
   </section>
 
@@ -56,20 +48,37 @@
     </div>
   </section>
 
+  <!-- 에디터 설정: 에디터 모듈이 설치된 경우에만 표시.
+       (이전엔 에디터가 없는데도 줄번호 설정이 보이던 모순을 수정) -->
+  {#if $installed.includes("code")}
+    <section>
+      <h2>에디터</h2>
+      <label class="row">
+        <span>줄 번호</span>
+        <select value={$settings.editor.lineNumbers}
+          on:change={(e) => updateSettings({ editor: { ...$settings.editor, lineNumbers: e.target.value } })}>
+          <option value="hybrid">하이브리드 상대</option>
+          <option value="absolute">절대</option>
+        </select>
+      </label>
+    </section>
+  {/if}
+
   <section>
     <h2>모듈</h2>
-    <p class="hint">설치한 모듈만 메모리에 로드됩니다. 제거하면 데이터는 압축 보관됩니다.</p>
+    <p class="hint">설치한 모듈만 메모리에 로드됩니다.</p>
     {#each allModuleKeys() as key}
       <div class="module-row">
         <span class="ico">{meta(key).icon}</span>
         <span class="name">{meta(key).label}</span>
         {#if $installed.includes(key)}
-          <button on:click={() => uninstall(key)}>제거</button>
+          <span class="state">설치됨</span>
         {:else}
           <button class="primary" on:click={() => install(key)}>설치</button>
         {/if}
       </div>
     {/each}
+    <p class="hint small">모듈 제거 기능은 이번 버전에서 비활성화되어 있습니다.</p>
   </section>
 </div>
 
@@ -77,16 +86,18 @@
   .settings { padding: 28px 32px; max-width: 720px; }
   h1 { font-size: 22px; font-weight: 500; margin: 0 0 20px; }
   h2 { font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 10px; }
-  .row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
-  .row > span:first-child { width: 120px; }
-  .row small { color: var(--text-dim); }
+  .row { display: flex; align-items: center; gap: 12px; padding: 8px 0; flex-wrap: wrap; }
+  .row > span:first-child { width: 90px; }
+  .row small { color: var(--text-dim); flex-basis: 100%; margin-left: 102px; }
   .colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .color { display: flex; align-items: center; gap: 8px; }
   .color input { width: 28px; height: 28px; border: 1px solid var(--line); background: none; border-radius: 4px; }
   .hint { color: var(--text-dim); font-size: 12px; }
+  .hint.small { margin-top: 12px; font-size: 11px; }
   .module-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
   .module-row .ico { width: 24px; text-align: center; color: var(--accent); }
   .module-row .name { flex: 1; }
+  .module-row .state { color: var(--text-dim); font-size: 12px; }
   button { border: 1px solid var(--line); border-radius: 6px; padding: 4px 14px; }
   button.primary { border-color: var(--accent); color: var(--accent); }
   select, input[type="checkbox"] { accent-color: var(--accent); }

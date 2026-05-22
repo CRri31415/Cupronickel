@@ -32,6 +32,12 @@ function apply(s) {
   root.dataset.motion = s.motion ? "on" : "off";
 }
 
+// 설정의 "창 크기"를 실제 Tauri 창에 반영한다.
+function applyWindowSize(s) {
+  const [w, h] = (s.resolution || "1600x900").split("x").map(Number);
+  if (w && h) ipc.setWindowSize(w, h).catch(() => {});
+}
+
 export async function loadSettings() {
   try {
     const raw = await ipc.readText("app/settings.json");
@@ -41,6 +47,7 @@ export async function loadSettings() {
     settings.set(DEFAULTS); // 최초 실행
   }
   apply(get(settings));
+  applyWindowSize(get(settings)); // 시작 시 저장된 크기로 창을 맞춤
 }
 
 // 부분 갱신 + 즉시 반영 + 저장.
@@ -48,5 +55,6 @@ export async function updateSettings(patch) {
   settings.update((s) => ({ ...s, ...patch }));
   const s = get(settings);
   apply(s);
+  if (patch.resolution) applyWindowSize(s); // 창 크기 변경 즉시 적용
   await ipc.writeText("app/settings.json", JSON.stringify(s, null, 2));
 }

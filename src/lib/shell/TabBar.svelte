@@ -15,7 +15,12 @@
     >
       <span class="title">{tab.title}</span>
       <!-- 우측 분할 토글 -->
-      <button class="mini" title="우측 분할" on:click|stopPropagation={() => toggleSplit(tab.id)}>⫾</button>
+      <button class="mini" title="우측 분할" on:click|stopPropagation={() => toggleSplit(tab.id)} aria-label="분할">
+        <svg viewBox="0 0 16 16" width="12" height="12">
+          <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/>
+          <line x1="8" y1="2.5" x2="8" y2="13.5" stroke="currentColor" stroke-width="1.3"/>
+        </svg>
+      </button>
       <button class="mini" title="닫기" on:click|stopPropagation={() => closeTab(tab.id)}>×</button>
     </div>
   {/each}

@@ -1,12 +1,13 @@
 <script>
-  // 메인화면 — 배경사진(사용자 변경 가능) + 위젯 보드 + 메모 부착 영역.
-  // 위젯 배치는 app/widgets.json 에 저장된다(여기서는 기본 레이아웃 시연).
+  // 메인화면 — 위젯 보드 + 메인에 부착된 메모(포스트잇) 표시.
+  // 부착 메모는 메모 모듈이 memo/notes.json 에 저장한 pinned 항목을 읽어 보여준다.
+  import { onMount } from "svelte";
+  import { ipc } from "../core/ipc.js";
   import ClockWidget from "./widgets/ClockWidget.svelte";
   import DDayWidget from "./widgets/DDayWidget.svelte";
   import CalendarWidget from "./widgets/CalendarWidget.svelte";
   import QuoteWidget from "./widgets/QuoteWidget.svelte";
 
-  // 위젯 인스턴스 목록. 추후 드래그 배치/추가 UI로 확장.
   const widgets = [
     { id: 1, type: "clock",    config: { mode: "digital", hour24: true, font: "mono" } },
     { id: 2, type: "dday",     config: { label: "프로젝트 마감", date: "2026-12-31" } },
@@ -15,8 +16,20 @@
   ];
   const map = { clock: ClockWidget, dday: DDayWidget, calendar: CalendarWidget, quote: QuoteWidget };
 
-  // 배경: 사용자가 지정한 이미지가 있으면 app/ 리소스에서 불러오도록 확장.
   let background = null;
+  let pinnedMemos = [];
+
+  // 메인화면이 열릴 때마다 부착 메모를 다시 읽는다(메모 탭에서 부착/해제한 결과 반영).
+  onMount(loadPinned);
+  async function loadPinned() {
+    try {
+      const raw = await ipc.readText("memo/notes.json");
+      const all = JSON.parse(raw);
+      pinnedMemos = all.filter((n) => n.pinned);
+    } catch {
+      pinnedMemos = []; // 메모 모듈 미설치 또는 부착 메모 없음
+    }
+  }
 </script>
 
 <div class="main" style={background ? `background-image:url(${background})` : ""}>
@@ -27,6 +40,14 @@
       </div>
     {/each}
   </div>
+
+  {#if pinnedMemos.length}
+    <div class="memos">
+      {#each pinnedMemos as m (m.id)}
+        <div class="postit">{m.text}</div>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -53,5 +74,22 @@
     place-items: center;
     min-height: 120px;
     backdrop-filter: blur(2px);
+  }
+  .memos {
+    margin-top: 22px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .postit {
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 90px;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    user-select: text;
   }
 </style>
