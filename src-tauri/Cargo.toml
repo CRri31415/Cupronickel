@@ -7,10 +7,10 @@ license = "GPL-2.0-only"
 edition = "2021"
 
 [build-dependencies]
-tauri-build = { version = "1.6", features = [] }
+tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.6", features = ["dialog-open", "dialog-save", "clipboard-all", "path-all"] }
+tauri = { version = "1.8", features = ["dialog-open", "dialog-save", "clipboard-all", "path-all"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 미설치 모듈을 압축 보관/해제하기 위한 zip 처리

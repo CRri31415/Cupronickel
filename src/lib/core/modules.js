@@ -24,13 +24,13 @@ import { API_VERSION } from "./api.js";
 
 // key → 동적 로더. 여기에 등록된 키만 "설치 가능한 모듈"로 간주된다.
 const LOADERS = {
-  memo:  () => import("../modules/memo/module.js"),
-  graph: () => import("../modules/graph/module.js"),
-  // note:     () => import("../modules/note/module.js"),
-  // card:     () => import("../modules/card/module.js"),
-  // calendar: () => import("../modules/calendar/module.js"),
-  // code:     () => import("../modules/code/module.js"),
-  // sheet:    () => import("../modules/sheet/module.js"),
+  memo:     () => import("../modules/memo/module.js"),
+  graph:    () => import("../modules/graph/module.js"),
+  card:     () => import("../modules/card/module.js"),
+  calendar: () => import("../modules/calendar/module.js"),
+  // note:  () => import("../modules/note/module.js"),
+  // code:  () => import("../modules/code/module.js"),
+  // sheet: () => import("../modules/sheet/module.js"),
 };
 
 // 설치 메타데이터(아이콘/이름 등)는 가벼우므로 미리 둔다.

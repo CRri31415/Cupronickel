@@ -5,7 +5,7 @@
 //! 물리 픽셀이 달라진다. 기획서가 말하는 1600x900 등은 물리 픽셀 기준이므로
 //! PhysicalSize로 설정해 배율 영향을 받지 않게 한다. 그 뒤 화면 중앙에 배치한다.
 
-use tauri::{Manager, PhysicalSize, PhysicalPosition};
+use tauri::{PhysicalSize, PhysicalPosition};
 
 #[tauri::command]
 pub fn set_window_size(window: tauri::Window, width: u32, height: u32) -> Result<(), String> {
