@@ -31,6 +31,8 @@
   let dragNote = null;
 
   onMount(async () => {
+    // 과거 버전 잔재로 생길 수 있는 'null' 폴더 정리
+    try { await cn.storage.remove("null"); } catch {}
     await refreshTree();
     loaded = true;
     if (tab?.state?.current) {
@@ -42,9 +44,9 @@
   // 디스크에서 폴더/노트 구조를 읽어온다.
   async function refreshTree() {
     const t = {};
-    const folders = (await cn.storage.list()).filter((i) => i.is_dir);
+    const folders = (await cn.storage.list()).filter((i) => i.is_dir && i.name && i.name !== "null");
     for (const f of folders) {
-      const notes = (await cn.storage.list(f.name)).filter((i) => i.is_dir).map((i) => i.name);
+      const notes = (await cn.storage.list(f.name)).filter((i) => i.is_dir && i.name && i.name !== "null").map((i) => i.name);
       t[f.name] = notes;
     }
     tree = t;

@@ -137,8 +137,22 @@
 
   async function exportPng() {
     const was = running; running = false;
+    // 모든 노드를 포함하도록 경계 계산 후 임시 viewBox 적용(잘림 방지)
+    const origViewBox = svgEl.getAttribute("viewBox");
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+      const r = radius(n) + 8;
+      minX = Math.min(minX, n.x - r); minY = Math.min(minY, n.y - r);
+      maxX = Math.max(maxX, n.x + r); maxY = Math.max(maxY, n.y + r);
+    }
+    if (!isFinite(minX)) { minX = 0; minY = 0; maxX = W; maxY = H; }
+    const pad = 20;
+    const vbX = minX - pad, vbY = minY - pad, vbW = (maxX - minX) + pad*2, vbH = (maxY - minY) + pad*2;
+    svgEl.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
+    await new Promise((r) => requestAnimationFrame(r)); // 적용 대기
     try { await cn.exporter.savePng(await cn.exporter.svgToPngDataUrl(svgEl, 2), title + ".png"); }
     catch (e) { console.warn("내보내기 실패:", e); }
+    svgEl.setAttribute("viewBox", origViewBox); // 복원
     running = was;
   }
 </script>

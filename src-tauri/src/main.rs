@@ -31,7 +31,8 @@ fn main() {
             modules::install_module,
             modules::uninstall_module,
             window::set_window_size,
-            exec::run_command,
+            exec::run_build,
+            exec::run_in_terminal,
         ])
         .run(tauri::generate_context!())
         .expect("Cupronickel 실행 중 오류");

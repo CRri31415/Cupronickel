@@ -41,8 +41,11 @@
     align-items: center;
     gap: 6px;
     padding: 0 8px 0 12px;
-    max-width: 200px;
-    min-width: 110px;
+    width: 160px;
+    min-width: 160px;
+    max-width: 160px;
+    flex: none;
+    box-sizing: border-box;
     border-right: 1px solid var(--line);
     color: var(--text-dim);
     background: var(--surface);

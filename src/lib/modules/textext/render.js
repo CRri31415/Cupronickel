@@ -52,9 +52,13 @@ export async function renderExtended(input) {
 
   // 2) 디스플레이 수식 $$..$$
   text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => {
-    try { return katex.renderToString(tex, { displayMode: true, throwOnError: false }); }
+    try { return "\u0001KMATH\u0001" + katex.renderToString(tex, { displayMode: true, throwOnError: false }) + "\u0001KMATH\u0001"; }
     catch { return escapeHtml("$$" + tex + "$$"); }
   });
+  // 디스플레이 수식은 블록이므로 앞뒤에 붙은 <br>을 제거(불필요한 줄바꿈 방지)
+  text = text.replace(/(<br\s*\/?>)?\s*\u0001KMATH\u0001/g, "\u0001KMATH\u0001");
+  text = text.replace(/\u0001KMATH\u0001\s*(<br\s*\/?>)?/g, "\u0001KMATH\u0001");
+  text = text.replace(/\u0001KMATH\u0001/g, "");
   // 3) 인라인 수식 $..$
   text = text.replace(/\$([^\$\n]+?)\$/g, (_, tex) => {
     try { return katex.renderToString(tex, { displayMode: false, throwOnError: false }); }

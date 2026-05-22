@@ -51,8 +51,10 @@ async function invoke(cmd, args) {
       }
       return;
     }
-    case "run_command":
-      return { stdout: "(dev 모드에서는 명령을 실행하지 않습니다)", stderr: "", code: 0 };
+    case "run_build":
+      return { stdout: "(dev 모드에서는 빌드를 실행하지 않습니다)", stderr: "", code: 0 };
+    case "run_in_terminal":
+      return;
     case "make_dir": {
       // dev: 빈 폴더 표시를 위해 placeholder 키를 둔다
       memFiles.set(args.rel + "/.keep", "");
@@ -81,5 +83,6 @@ export const ipc = {
   deletePath: (rel) => invoke("delete_path", { rel }),
   makeDir: (rel) => invoke("make_dir", { rel }),
   openDataFolder: () => invoke("open_data_folder"),
-  runCommand: (project, program, args) => invoke("run_command", { project, program, args }),
+  runBuild: (project, program, args) => invoke("run_build", { project, program, args }),
+  runInTerminal: (project, cmdLine) => invoke("run_in_terminal", { project, cmdLine }),
 };

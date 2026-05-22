@@ -149,7 +149,8 @@ export function makeApi(moduleKey) {
     exporter,
     // 외부 명령 실행(에디터 모듈 전용). project=code/ 하위 폴더명.
     exec: {
-      run: (project, program, args) => ipc.runCommand(project, program, args),
+      build: (project, program, args) => ipc.runBuild(project, program, args),
+      runInTerminal: (project, cmdLine) => ipc.runInTerminal(project, cmdLine),
     },
   };
 }
