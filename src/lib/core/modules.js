@@ -28,7 +28,8 @@ const LOADERS = {
   graph:    () => import("../modules/graph/module.js"),
   card:     () => import("../modules/card/module.js"),
   calendar: () => import("../modules/calendar/module.js"),
-  // note:  () => import("../modules/note/module.js"),
+  note:     () => import("../modules/note/module.js"),
+  textext:  () => import("../modules/textext/module.js"),
   // code:  () => import("../modules/code/module.js"),
   // sheet: () => import("../modules/sheet/module.js"),
 };
@@ -43,6 +44,7 @@ const META = {
   code:     { label: "에디터",   icon: "E", singleton: false, exclusiveFile: true },
   graph:    { label: "그래프",   icon: "G", singleton: false, exclusiveFile: true },
   sheet:    { label: "시트",     icon: "S", singleton: false, exclusiveFile: true },
+  textext:  { label: "텍스트확장", icon: "Tx", singleton: true, exclusiveFile: false },
 };
 
 // 설치된 모듈 키 목록 (사이드바가 구독)

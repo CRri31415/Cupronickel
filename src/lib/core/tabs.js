@@ -70,6 +70,8 @@ export function openCore(kind) {
 
 /** 탭 포커스: 활성화하고 lastUsed 갱신. */
 export function focus(id) {
+  // 우측 분할에 있는 탭을 좌측으로 포커스하면 양쪽이 같아지므로, 분할을 해제한다.
+  if (get(splitTabId) === id) splitTabId.set(null);
   activeTabId.set(id);
   tabs.update((ts) =>
     ts.map((t) => (t.id === id ? { ...t, active: true, lastUsed: Date.now() } : t))
@@ -90,9 +92,23 @@ export function closeTab(id) {
   persist();
 }
 
-/** 우측 분할 패널에 탭 띄우기(같은 탭이면 분할 해제). */
+/** 우측 분할 패널로 탭을 이동시킨다.
+ *  - 이미 우측에 있는 탭을 다시 누르면 분할 해제(좌측으로 복귀).
+ *  - 좌측 활성 탭을 우측으로 보내면, 좌측은 다른 탭으로 자동 이동(같은 탭이
+ *    양쪽에 보이는 문제 방지).
+ */
 export function toggleSplit(id) {
-  splitTabId.update((cur) => (cur === id ? null : id));
+  const curSplit = get(splitTabId);
+  if (curSplit === id) { splitTabId.set(null); return; } // 해제
+
+  splitTabId.set(id);
+  // 좌측(active)이 방금 우측으로 보낸 탭과 같으면 좌측을 다른 탭으로 옮긴다.
+  if (get(activeTabId) === id) {
+    const list = get(tabs);
+    const other = list.find((t) => t.id !== id);
+    activeTabId.set(other ? other.id : null);
+  }
+  persist();
 }
 
 /** 모듈이 자기 상태를 갱신할 때 사용(스크롤 위치 등 가벼운 것만). */

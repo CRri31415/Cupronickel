@@ -16,5 +16,9 @@
     "@tauri-apps/cli": "^1.6.0",
     "svelte": "^4.2.20",
     "vite": "^5.4.21"
+  },
+  "dependencies": {
+    "katex": "^0.16.47",
+    "smiles-drawer": "^2.3.0"
   }
 }

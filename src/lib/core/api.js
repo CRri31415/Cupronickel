@@ -56,6 +56,16 @@ function makeStorage(moduleKey) {
     writeJson(rel, value) {
       return this.writeText(rel, JSON.stringify(value));
     },
+    /** 모듈 폴더 기준 하위 폴더/파일 나열. rel 생략 시 모듈 루트. */
+    async list(rel = "") {
+      const target = rel ? scope(rel) : moduleKey;
+      try { return await ipc.listDir(target); }
+      catch { return []; }
+    },
+    /** 모듈 폴더 기준 파일/폴더 삭제. */
+    remove(rel) {
+      return ipc.deletePath(scope(rel));
+    },
   };
 }
 

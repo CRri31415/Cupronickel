@@ -83,6 +83,38 @@ pub fn load_session(app: tauri::AppHandle) -> Result<String, String> {
     }
 }
 
+/// 데이터 루트 기준 상대 폴더의 항목들을 나열한다.
+/// 반환: [{name, is_dir}] (숨김/시스템 파일 제외는 호출 측에서).
+#[tauri::command]
+pub fn list_dir(app: tauri::AppHandle, rel: String) -> Result<Vec<serde_json::Value>, String> {
+    let path = resolve_within(&app, &rel)?;
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    let mut out = vec![];
+    for entry in std::fs::read_dir(&path).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let is_dir = entry.path().is_dir();
+        out.push(serde_json::json!({ "name": name, "is_dir": is_dir }));
+    }
+    Ok(out)
+}
+
+/// 데이터 루트 기준 상대경로의 파일 또는 폴더를 삭제한다(폴더는 재귀).
+#[tauri::command]
+pub fn delete_path(app: tauri::AppHandle, rel: String) -> Result<(), String> {
+    let path = resolve_within(&app, &rel)?;
+    if !path.exists() {
+        return Ok(());
+    }
+    if path.is_dir() {
+        std::fs::remove_dir_all(&path).map_err(|e| e.to_string())
+    } else {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())
+    }
+}
+
 /// PNG 데이터URL("data:image/png;base64,....")을 디코드하여
 /// 사용자가 저장 대화상자로 고른 경로에 저장한다.
 /// 그래프 다이어그램/시트의 "이미지로 내보내기"에 쓰인다.

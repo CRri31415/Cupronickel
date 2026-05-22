@@ -83,21 +83,18 @@
   })();
   $: maxCount = Math.max(1, ...Object.values(countByDate));
 
-  function heatStyle(day) {
-    if (!day) return "";
-    const key = iso(new Date(year, month, day));
-    const c = countByDate[key] || 0;
-    if (!c) return "";
-    const ratio = c / maxCount;
-    return `background: color-mix(in srgb, var(--accent-2) ${Math.round(20 + ratio*60)}%, transparent)`;
-  }
-  function eventsOn(day) {
-    const key = iso(new Date(year, month, day));
-    return events.filter((e) => {
-      if (filterTag && !e.tags.includes(filterTag)) return false;
-      return key >= e.start && key <= (e.end || e.start);
-    });
-  }
+  // 날짜(키)별 일정 목록을 반응형 맵으로 — events가 바뀌면 즉시 갱신된다.
+  $: eventsByDate = (() => {
+    const m = {};
+    for (const e of events) {
+      if (filterTag && !e.tags.includes(filterTag)) continue;
+      const s = new Date(e.start), en = new Date(e.end || e.start);
+      for (let d = new Date(s); d <= en; d.setDate(d.getDate() + 1)) {
+        (m[iso(d)] ||= []).push(e);
+      }
+    }
+    return m;
+  })();
 
   // 모든 태그(필터 드롭다운)
   $: allTags = [...new Set(events.flatMap((e) => e.tags))];
@@ -126,12 +123,14 @@
       {#each ["일","월","화","수","목","금","토"] as w}<span>{w}</span>{/each}
     </div>
     <div class="days">
-      {#each cells as day}
-        <div class="day" class:empty={!day} style={heatStyle(day)}
-             on:dblclick={() => day && addEvent(iso(new Date(year, month, day)))}>
+      {#each cells as day (day ?? `e${Math.random()}`)}
+        {@const key = day ? iso(new Date(year, month, day)) : ""}
+        <div class="day" class:empty={!day}
+             style={day && countByDate[key] ? `background: color-mix(in srgb, var(--accent-2) ${Math.round(20 + (countByDate[key]/maxCount)*60)}%, transparent)` : ""}
+             on:dblclick={() => day && addEvent(key)}>
           {#if day}
             <span class="num" class:today={day === today.getDate() && month === today.getMonth() && year === today.getFullYear()}>{day}</span>
-            {#each eventsOn(day).slice(0, 3) as e (e.id)}
+            {#each (eventsByDate[key] || []).slice(0, 3) as e (e.id)}
               <div class="chip" style="border-left:3px solid {IMP_COLORS[e.importance]}"
                    on:click={() => (selected = e)} title={e.title}>{e.title}</div>
             {/each}
@@ -176,7 +175,7 @@
       <label>후속 일정
         <select value={selected.followsId ?? ""} on:change={(e) => patch({ followsId: e.target.value || null })}>
           <option value="">없음</option>
-          {#each events.filter((x) => x.id !== selected.id) as x}<option value={x.id}>{x.title}</option>{/each}
+          {#each events.filter((x) => x.id !== selected.id && x.start >= selected.start) as x}<option value={x.id}>{x.title}</option>{/each}
         </select>
       </label>
       <label>설명<textarea value={selected.desc} on:input={(e) => patch({ desc: e.target.value })}></textarea></label>

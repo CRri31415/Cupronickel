@@ -33,6 +33,24 @@ async function invoke(cmd, args) {
       return args.name || "export.png";
     }
     case "set_window_size": return; // dev(브라우저)에선 무시
+    case "list_dir": {
+      const prefix = args.rel.endsWith("/") ? args.rel : args.rel + "/";
+      const names = new Set();
+      for (const k of memFiles.keys()) {
+        if (k.startsWith(prefix)) {
+          const rest = k.slice(prefix.length);
+          const seg = rest.split("/")[0];
+          names.add(JSON.stringify({ name: seg, is_dir: rest.includes("/") }));
+        }
+      }
+      return [...names].map((s) => JSON.parse(s));
+    }
+    case "delete_path": {
+      for (const k of [...memFiles.keys()]) {
+        if (k === args.rel || k.startsWith(args.rel + "/")) memFiles.delete(k);
+      }
+      return;
+    }
     default: throw new Error("unknown command: " + cmd);
   }
 }
@@ -50,4 +68,7 @@ export const ipc = {
   savePngDataUrl: (dataUrl, name) => invoke("save_png", { dataUrl, name }),
   // 창 픽셀 크기를 지정하고 화면 중앙에 배치한다.
   setWindowSize: (width, height) => invoke("set_window_size", { width, height }),
+  // 폴더 나열 / 경로 삭제
+  listDir: (rel) => invoke("list_dir", { rel }),
+  deletePath: (rel) => invoke("delete_path", { rel }),
 };

@@ -22,6 +22,8 @@ fn main() {
             storage::save_session,
             storage::load_session,
             storage::save_png,
+            storage::list_dir,
+            storage::delete_path,
             modules::list_modules,
             modules::install_module,
             modules::uninstall_module,
