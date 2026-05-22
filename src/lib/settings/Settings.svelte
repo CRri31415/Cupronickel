@@ -99,7 +99,7 @@
     <div class="modal-bg" on:click={() => (viGate = false)}>
       <div class="modal" on:click|stopPropagation>
         <h3>vi 키맵 활성화</h3>
-        <p>vi에 익숙한지 확인합니다. <strong>노멀 모드에서 저장 후 종료하는 명령</strong>을 콜론(:)까지 포함해 입력하세요. (예: 콜론 다음 wq)</p>
+        <p>vi에 익숙한지 확인합니다. <strong>노멀 모드에서 저장 후 종료하는 명령</strong>을 입력하세요. 명령 모드 진입을 위한 콜론(:)까지 포함해야 합니다.</p>
         <input bind:value={viGateInput} on:keydown={(e) => e.key === "Enter" && checkGate()}
           placeholder="여기에 입력" autofocus />
         {#if gateError}<span class="gate-err">{gateError}</span>{/if}

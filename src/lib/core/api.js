@@ -111,12 +111,26 @@ const exporter = {
       const vb = svgEl.viewBox.baseVal;
       const w = vb.width || svgEl.clientWidth;
       const h = vb.height || svgEl.clientHeight;
-      // 직렬화 전에 width/height/viewBox를 명시한 복제본을 만든다.
-      // (원본 viewBox의 x/y 오프셋까지 반영되어 모든 노드가 잘리지 않고 담긴다.)
       const clone = svgEl.cloneNode(true);
       clone.setAttribute("width", w);
       clone.setAttribute("height", h);
       clone.setAttribute("viewBox", `${vb.x} ${vb.y} ${w} ${h}`);
+
+      // CSS 변수(var(--...))로 칠한 색은 직렬화 시 해석되지 않아 사라진다(특히 간선).
+      // 원본의 각 요소에서 '계산된' stroke/fill을 읽어 복제본에 실제 색으로 인라인한다.
+      const origEls = svgEl.querySelectorAll("*");
+      const cloneEls = clone.querySelectorAll("*");
+      for (let k = 0; k < origEls.length; k++) {
+        const cs = getComputedStyle(origEls[k]);
+        const ce = cloneEls[k];
+        if (!ce) continue;
+        const stroke = origEls[k].getAttribute("stroke");
+        const fill = origEls[k].getAttribute("fill");
+        if (stroke && stroke.includes("var(")) ce.setAttribute("stroke", cs.stroke);
+        if (fill && fill.includes("var(")) ce.setAttribute("fill", cs.fill);
+        // grid 패턴 등 배경은 빼고, 흰 배경을 깔아 투명 PNG가 검게 보이지 않도록.
+      }
+
       const xml = new XMLSerializer().serializeToString(clone);
       const svgBlob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(svgBlob);
@@ -126,6 +140,8 @@ const exporter = {
         canvas.width = w * scale;
         canvas.height = h * scale;
         const cx = canvas.getContext("2d");
+        cx.fillStyle = "#ffffff";
+        cx.fillRect(0, 0, canvas.width, canvas.height);
         cx.scale(scale, scale);
         cx.drawImage(img, 0, 0, w, h);
         URL.revokeObjectURL(url);

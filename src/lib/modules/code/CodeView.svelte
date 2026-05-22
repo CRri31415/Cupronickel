@@ -34,9 +34,9 @@
 
   // 빌드/실행 명령(언어별, %f=파일명 %e=확장자 제외). 사용자 설정 + 기본 복원.
   const DEFAULT_CMDS = {
-    c:  { build: 'gcc -Wall -c "%f"', run: '"./%e"' },
-    py: { build: 'python -m py_compile "%f"', run: 'python "%f"' },
-    hs: { build: 'ghc --make "%f"', run: '"./%e"' },
+    c:  { build: "gcc -Wall -c %f", run: "./%e" },
+    py: { build: "python -m py_compile %f", run: "python %f" },
+    hs: { build: "ghc --make %f", run: "./%e" },
   };
   let cmds = JSON.parse(JSON.stringify(DEFAULT_CMDS));
   let showCmdSettings = false;
@@ -205,6 +205,9 @@
 
   // vi 키맵 구현. true 반환 시 기본 동작 차단.
   let _lastKey = "";
+  let register = "";          // yy/dd 등의 복사 버퍼
+  let undoStack = [];          // 간단한 되돌리기
+  function pushUndo() { undoStack.push(content); if (undoStack.length > 100) undoStack.shift(); }
   function setCaret(p) { queueMicrotask(() => { if (taEl) { taEl.selectionStart = taEl.selectionEnd = Math.max(0, Math.min(content.length, p)); updateCursor(); } }); }
   function lineBounds(pos) {
     const start = content.lastIndexOf("\n", pos - 1) + 1;
@@ -228,53 +231,92 @@
     e.preventDefault();
     const pos = ta.selectionStart;
     const { start, end } = lineBounds(pos);
-    switch (e.key) {
+    const ch = e.key;
+    switch (ch) {
       case ":": viMode = "command"; viCommand = ":"; break;
-      case "i": viMode = "insert"; break;
-      case "a": setCaret(pos + 1); viMode = "insert"; break;
-      case "A": setCaret(end); viMode = "insert"; break;
-      case "I": setCaret(start); viMode = "insert"; break;
+      case "i": pushUndo(); viMode = "insert"; break;
+      case "a": pushUndo(); setCaret(pos + 1); viMode = "insert"; break;
+      case "A": pushUndo(); setCaret(end); viMode = "insert"; break;
+      case "I": pushUndo(); setCaret(start); viMode = "insert"; break;
       case "h": setCaret(pos - 1); break;
       case "l": setCaret(pos + 1); break;
-      case "j": { // 아래 줄 같은 칼럼
+      case "j": {
         const col = pos - start;
         if (end < content.length) { const ns = end + 1; const ne = (content.indexOf("\n", ns) === -1 ? content.length : content.indexOf("\n", ns)); setCaret(Math.min(ns + col, ne)); }
         break;
       }
-      case "k": { // 위 줄 같은 칼럼
+      case "k": {
         const col = pos - start;
         if (start > 0) { const ps = content.lastIndexOf("\n", start - 2) + 1; const pe = start - 1; setCaret(Math.min(ps + col, pe)); }
         break;
       }
       case "0": setCaret(start); break;
       case "$": setCaret(end); break;
-      case "x": { // 커서 위치 글자 삭제, 커서는 제자리(줄 끝이면 한 칸 왼쪽)
-        if (pos < end) { content = content.slice(0, pos) + content.slice(pos + 1); onEdit(content); setCaret(pos); }
-        break;
-      }
+      case "^": { const m = content.slice(start, end).match(/^\s*/); setCaret(start + (m ? m[0].length : 0)); break; }
+      case "w": { const m = content.slice(pos).match(/^\s*\S+\s*/); setCaret(pos + (m ? m[0].length : 1)); break; }
+      case "b": { const before = content.slice(0, pos).match(/\S+\s*$/); setCaret(before ? pos - before[0].length : pos - 1); break; }
+      case "e": { const m = content.slice(pos + 1).match(/\s*\S+/); setCaret(m ? pos + m[0].length : pos); break; }
+      case "G": setCaret(content.length); break;
+      case "g": { if (_lastKey === "g") { setCaret(0); _lastKey = ""; return true; } _lastKey = "g"; return true; }
+      case "x": { if (pos < end) { register = content[pos]; content = content.slice(0, pos) + content.slice(pos + 1); onEdit(content); setCaret(pos); } break; }
+      case "D": { register = content.slice(pos, end); content = content.slice(0, pos) + content.slice(end); onEdit(content); setCaret(Math.max(start, pos - 1)); break; }
+      case "C": { register = content.slice(pos, end); content = content.slice(0, pos) + content.slice(end); onEdit(content); setCaret(pos); viMode = "insert"; break; }
       case "o": { content = content.slice(0, end) + "\n" + content.slice(end); onEdit(content); setCaret(end + 1); viMode = "insert"; break; }
       case "O": { content = content.slice(0, start) + "\n" + content.slice(start); onEdit(content); setCaret(start); viMode = "insert"; break; }
+      case "p": { if (register) { content = content.slice(0, pos + 1) + register + content.slice(pos + 1); onEdit(content); setCaret(pos + register.length); } break; }
+      case "P": { if (register) { content = content.slice(0, pos) + register + content.slice(pos); onEdit(content); setCaret(pos + register.length - 1); } break; }
+      case "u": { if (undoStack.length) { content = undoStack.pop(); onEdit(content); } break; }
       case "d": {
-        if (_lastKey === "d") { // dd: 줄 삭제
+        if (_lastKey === "d") { // dd: 줄 삭제(+레지스터 복사)
           const delEnd = end < content.length ? end + 1 : end;
+          register = content.slice(start, delEnd);
+          pushUndo();
           content = content.slice(0, start) + content.slice(delEnd); onEdit(content); setCaret(start);
           _lastKey = ""; return true;
         }
         _lastKey = "d"; return true;
       }
+      case "y": {
+        if (_lastKey === "y") { // yy: 줄 복사
+          const copyEnd = end < content.length ? end + 1 : end;
+          register = content.slice(start, copyEnd);
+          _lastKey = ""; return true;
+        }
+        _lastKey = "y"; return true;
+      }
+      case "c": {
+        if (_lastKey === "c") { // cc: 줄 비우고 insert
+          pushUndo();
+          content = content.slice(0, start) + content.slice(end); onEdit(content); setCaret(start); viMode = "insert";
+          _lastKey = ""; return true;
+        }
+        _lastKey = "c"; return true;
+      }
       default: break;
     }
-    _lastKey = e.key;
+    _lastKey = ch;
     return true;
   }
   function runViCommand(cmd) {
     const c = cmd.replace(/^:/, "").trim().toLowerCase();
-    // 저장/종료 계열만 의미 있게 처리(단일 파일 에디터라 q는 닫기 대용)
-    if (["w", "wq", "x", "wq!", "x!"].includes(c)) {
+    // :숫자 → 해당 줄로 이동
+    if (/^\d+$/.test(c)) {
+      const ln = Math.max(1, parseInt(c, 10));
+      const lines2 = content.split("\n");
+      let p = 0;
+      for (let i = 0; i < Math.min(ln - 1, lines2.length); i++) p += lines2[i].length + 1;
+      setCaret(p);
+      return;
+    }
+    if (["w", "wq", "x", "wq!", "x!", "wa", "wqa"].includes(c)) {
       if (curProject && curFile) cn.storage.writeText(filePath(curProject, curFile), content);
       output = `저장했습니다: ${curFile}`;
-    } else if (["q", "q!"].includes(c)) {
+    } else if (["q", "q!", "qa"].includes(c)) {
       output = "(단일 파일 편집 화면이라 닫기는 탭에서 합니다)";
+    } else if (c === "$") {
+      setCaret(content.length);
+    } else if (c === "0" || c === "1") {
+      setCaret(0);
     } else {
       output = `알 수 없는 명령: :${c}`;
     }

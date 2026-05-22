@@ -9,7 +9,7 @@
   },
   "package": {
     "productName": "Cupronickel",
-    "version": "0.10.0-alpha"
+    "version": "1.0.0-alpha"
   },
   "tauri": {
     "allowlist": {
