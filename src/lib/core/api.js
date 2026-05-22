@@ -66,6 +66,10 @@ function makeStorage(moduleKey) {
     remove(rel) {
       return ipc.deletePath(scope(rel));
     },
+    /** 모듈 폴더 기준 폴더를 실제로 생성(빈 폴더 보존). */
+    mkdir(rel) {
+      return ipc.makeDir(scope(rel));
+    },
   };
 }
 

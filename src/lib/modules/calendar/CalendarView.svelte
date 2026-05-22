@@ -151,8 +151,18 @@
           {#if day}
             <span class="num" class:today={day === today.getDate() && month === today.getMonth() && year === today.getFullYear()}>{day}</span>
             {#each (eventsByDate[key] || []).slice(0, 3) as e (e.id)}
-              <div class="chip" style="border-left:3px solid {IMP_COLORS[e.importance]}"
-                   on:click={() => openEdit(e)} title={e.title}>{e.title}</div>
+              {@const isStart = e.start === key}
+              {@const isEnd = (e.end || e.start) === key}
+              {@const multi = e.end && e.end !== e.start}
+              <div class="chip"
+                   class:multi
+                   class:bar-start={multi && isStart}
+                   class:bar-mid={multi && !isStart && !isEnd}
+                   class:bar-end={multi && isEnd}
+                   style="background:{multi ? IMP_COLORS[e.importance] : 'transparent'}; border-left:{multi ? 'none' : '3px solid ' + IMP_COLORS[e.importance]}"
+                   on:click={() => openEdit(e)} title={e.title}>
+                {#if !multi || isStart}{e.title}{:else}&nbsp;{/if}
+              </div>
             {/each}
           {/if}
         </div>
@@ -230,6 +240,9 @@
   .num.today { color: var(--bg); background: var(--accent); border-radius: 4px; padding: 0 5px; }
   .chip { font-size: 11px; background: var(--surface-2); border-radius: 3px; padding: 1px 4px; margin-top: 2px;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .chip.multi { color: var(--bg); border-radius: 0; margin-left: -5px; margin-right: -5px; padding-left: 8px; padding-right: 8px; }
+  .chip.bar-start { border-radius: 3px 0 0 3px; margin-left: 0; padding-left: 5px; }
+  .chip.bar-end { border-radius: 0 3px 3px 0; margin-right: 0; padding-right: 5px; }
   .tip { color: var(--text-dim); font-size: 11px; margin: 8px 0 0; }
 
   .list-pane { border-left: 1px solid var(--line); padding: 20px 14px; overflow: auto; }

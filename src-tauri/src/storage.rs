@@ -83,6 +83,28 @@ pub fn load_session(app: tauri::AppHandle) -> Result<String, String> {
     }
 }
 
+/// 데이터 루트 폴더를 OS 파일 탐색기에서 연다.
+#[tauri::command]
+pub fn open_data_folder(app: tauri::AppHandle) -> Result<(), String> {
+    let root = paths::data_root(&app);
+    std::fs::create_dir_all(&root).ok();
+    let path = root.to_string_lossy().to_string();
+    #[cfg(target_os = "windows")]
+    let r = std::process::Command::new("explorer").arg(&path).spawn();
+    #[cfg(target_os = "linux")]
+    let r = std::process::Command::new("xdg-open").arg(&path).spawn();
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    let r: std::io::Result<_> = Err(std::io::Error::new(std::io::ErrorKind::Other, "unsupported"));
+    r.map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// 데이터 루트 기준 상대 폴더를 실제로 생성한다(빈 폴더 보존용).
+#[tauri::command]
+pub fn make_dir(app: tauri::AppHandle, rel: String) -> Result<(), String> {
+    let path = resolve_within(&app, &rel)?;
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())
+}
+
 /// 데이터 루트 기준 상대 폴더의 항목들을 나열한다.
 /// 반환: [{name, is_dir}] (숨김/시스템 파일 제외는 호출 측에서).
 #[tauri::command]

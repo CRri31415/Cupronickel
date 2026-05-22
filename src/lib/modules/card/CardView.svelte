@@ -63,8 +63,20 @@
   function startAddDeck() { addingDeck = true; newDeckName = ""; }
   function commitDeck() {
     const name = newDeckName.trim();
-    if (name) activeDeck = name; // 카드를 추가하면 이 덱에 속하게 됨
+    if (name) activeDeck = name;
     addingDeck = false;
+  }
+  // 덱 이름 변경(우클릭): 그 덱의 카드들 deck 필드를 일괄 변경
+  let deckCtx = null, renamingDeck = null, renameDeckValue = "";
+  function openDeckCtx(e, d) { e.preventDefault(); deckCtx = { x: e.clientX, y: e.clientY, deck: d }; }
+  function closeDeckCtx() { deckCtx = null; }
+  function startRenameDeck(d) { renamingDeck = d; renameDeckValue = d; deckCtx = null; }
+  function commitRenameDeck() {
+    const from = renamingDeck; const to = renameDeckValue.trim(); renamingDeck = null;
+    if (!to || to === from) return;
+    cards = cards.map((c) => (c.deck === from ? { ...c, deck: to } : c));
+    if (activeDeck === from) activeDeck = to;
+    save();
   }
 
   // --- 복습 ---
@@ -118,6 +130,8 @@
   }
 </script>
 
+<svelte:window on:click={closeDeckCtx} />
+
 <div class="card-mod editable">
   {#if mode === "manage"}
     <div class="layout">
@@ -125,10 +139,16 @@
       <aside class="decks">
         <div class="decks-head">덱</div>
         {#each decks as d}
-          <button class="deck" class:on={activeDeck === d} on:click={() => (activeDeck = d)}>
-            <span class="dname">{d}</span>
-            {#if dueCountOf(d) > 0}<span class="badge">{dueCountOf(d)}</span>{/if}
-          </button>
+          {#if renamingDeck === d}
+            <input class="inline-input" bind:value={renameDeckValue}
+              on:keydown={(e) => e.key === "Enter" && commitRenameDeck()} on:blur={commitRenameDeck} autofocus />
+          {:else}
+            <button class="deck" class:on={activeDeck === d} on:click={() => (activeDeck = d)}
+              on:contextmenu={(e) => d !== "전체" && openDeckCtx(e, d)}>
+              <span class="dname">{d}</span>
+              {#if dueCountOf(d) > 0}<span class="badge">{dueCountOf(d)}</span>{/if}
+            </button>
+          {/if}
         {/each}
         {#if addingDeck}
           <input class="inline-input" bind:value={newDeckName} placeholder="덱 이름"
@@ -194,6 +214,12 @@
   {/if}
 </div>
 
+{#if deckCtx}
+  <div class="ctxmenu" style="left:{deckCtx.x}px; top:{deckCtx.y}px">
+    <button on:click={() => startRenameDeck(deckCtx.deck)}>덱 이름 변경</button>
+  </div>
+{/if}
+
 <style>
   .card-mod { height: 100%; box-sizing: border-box; }
   .layout { display: grid; grid-template-columns: 180px 1fr; height: 100%; }
@@ -242,4 +268,7 @@
   .rate .iv { font-size: 11px; color: var(--text-dim); }
   .rate:hover { border-color: var(--accent); }
   .quit { color: var(--text-dim); border: none; font-size: 12px; }
+  .ctxmenu { position: fixed; z-index: 100; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .ctxmenu button { border: none; text-align: left; padding: 8px 12px; border-radius: 5px; color: var(--text); }
+  .ctxmenu button:hover { background: var(--surface); }
 </style>

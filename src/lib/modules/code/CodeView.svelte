@@ -31,14 +31,27 @@
   let addingProject = false, newProjName = "";
   let addingFile = false, newFileName = "";
 
-  const LANG = { c: { ext: "c", run: (f) => ["gcc", [f, "-o", "out", "&&", "out"]] },
-                 py: { ext: "py", run: (f) => ["python", [f]] },
-                 hs: { ext: "hs", run: (f) => ["ghc", ["--make", f]] } };
+  // 언어별 기본 빌드/실행 명령. %f = 파일명. 사용자가 설정에서 바꿀 수 있고,
+  // 실수로 망친 경우 기본값 복원 버튼을 제공한다.
+  const DEFAULT_CMDS = {
+    c:  "gcc %f -o out && ./out",
+    py: "python %f",
+    hs: "ghc --make %f && ./%e",   // %e = 확장자 제외 실행파일명
+  };
+  let cmds = { ...DEFAULT_CMDS };
+  let showCmdSettings = false;
+
+  function loadCmds() {
+    cn.storage.readJson("_commands.json", null).then((c) => { if (c) cmds = { ...DEFAULT_CMDS, ...c }; });
+  }
+  function saveCmds() { cn.storage.writeJson("_commands.json", cmds); }
+  function resetCmds() { cmds = { ...DEFAULT_CMDS }; saveCmds(); }
 
   onMount(async () => {
     const idx = (await cn.storage.readJson("_index.json", null)) ?? { projects: [] };
     projects = idx.projects ?? [];
     loaded = true;
+    loadCmds();
     if (tab?.state?.curProject) {
       curProject = tab.state.curProject;
       if (tab.state.curFile) openFile(tab.state.curProject, tab.state.curFile);
@@ -62,9 +75,12 @@
 
   // 프로젝트/파일 생성
   function startAddProject() { addingProject = true; newProjName = ""; }
-  function commitProject() {
+  async function commitProject() {
     const n = newProjName.trim();
-    if (n && !projects.some((p) => p.name === n)) { projects = [...projects, { name: n, files: [] }]; saveIndex(); }
+    if (n && !projects.some((p) => p.name === n)) {
+      await cn.storage.mkdir(n);  // 실제 폴더 생성
+      projects = [...projects, { name: n, files: [] }]; saveIndex();
+    }
     addingProject = false;
   }
   function startAddFile(p) { addingFile = p; newFileName = ""; }
@@ -94,6 +110,33 @@
   function openCtx(e, type, p, f) { e.preventDefault(); ctx = { x: e.clientX, y: e.clientY, type, p, f }; }
   function closeCtx() { ctx = null; }
 
+  // 이름 변경
+  let renaming = null, renameValue = "";
+  function startRename(type, p, f) { renaming = { type, p, f }; renameValue = type === "project" ? p : f; ctx = null; }
+  async function commitRename() {
+    const r = renaming; renaming = null; const v = renameValue.trim();
+    if (!v) return;
+    if (r.type === "project") {
+      if (projects.some((x) => x.name === v)) { alert("같은 프로젝트가 있습니다."); return; }
+      const proj = projects.find((x) => x.name === r.p);
+      for (const f of proj.files) {
+        const body = await cn.storage.readText(filePath(r.p, f));
+        await cn.storage.writeText(filePath(v, f), body ?? "");
+      }
+      await cn.storage.remove(r.p);
+      proj.name = v; projects = projects; saveIndex();
+      if (curProject === r.p) curProject = v;
+    } else {
+      const proj = projects.find((x) => x.name === r.p);
+      if (proj.files.includes(v)) { alert("같은 파일이 있습니다."); return; }
+      const body = await cn.storage.readText(filePath(r.p, r.f));
+      await cn.storage.writeText(filePath(r.p, v), body ?? "");
+      await cn.storage.remove(filePath(r.p, r.f));
+      proj.files = proj.files.map((x) => (x === r.f ? v : x)); projects = projects; saveIndex();
+      if (curProject === r.p && curFile === r.f) { curFile = v; }
+    }
+  }
+
   // 빌드/실행
   async function runFile() {
     if (!curProject || !curFile) return;
@@ -101,8 +144,14 @@
     const langKey = ext === "c" ? "c" : ext === "py" ? "py" : ext === "hs" ? "hs" : null;
     if (!langKey) { output = "지원 언어(.c/.py/.hs)가 아닙니다."; return; }
     output = "실행 중...";
-    const [prog, args] = LANG[langKey].run(curFile);
+    // 명령 문자열에서 %f(파일명), %e(확장자 제외)를 치환한 뒤 셸로 실행한다.
+    const base = curFile.replace(/\.[^.]+$/, "");
+    const cmdStr = cmds[langKey].replace(/%f/g, curFile).replace(/%e/g, base);
     try {
+      // 셸 연산자(&&, ./)를 처리하기 위해 OS 셸로 실행한다.
+      const isWin = navigator.userAgent.includes("Windows");
+      const prog = isWin ? "cmd" : "sh";
+      const args = isWin ? ["/c", cmdStr] : ["-c", cmdStr];
       const r = await cn.exec.run(curProject, prog, args);
       output = (r.stdout || "") + (r.stderr ? "\n[stderr]\n" + r.stderr : "") + `\n[종료 코드 ${r.code}]`;
     } catch (e) { output = "실행 실패: " + e; }
@@ -167,16 +216,24 @@
     {#if loaded}
       {#each projects as p (p.name)}
         <div class="proj" on:contextmenu={(e) => openCtx(e, "project", p.name)}>
-          <span class="pname">{p.name}</span>
-          <button class="addf" on:click={() => startAddFile(p.name)} title="새 파일">+</button>
+          {#if renaming?.type === "project" && renaming.p === p.name}
+            <input class="inline" bind:value={renameValue} on:keydown={(e) => e.key === "Enter" && commitRename()} on:blur={commitRename} autofocus />
+          {:else}
+            <span class="pname">{p.name}</span>
+            <button class="addf" on:click={() => startAddFile(p.name)} title="새 파일">+</button>
+          {/if}
         </div>
         {#if addingFile === p.name}
           <input class="inline indented" bind:value={newFileName} placeholder="파일명 (예: main.c)"
             on:keydown={(e) => e.key === "Enter" && commitFile()} on:blur={commitFile} autofocus />
         {/if}
         {#each p.files as f (f)}
-          <div class="file" class:on={curProject === p.name && curFile === f}
-               on:click={() => openFile(p.name, f)} on:contextmenu={(e) => openCtx(e, "file", p.name, f)}>{f}</div>
+          {#if renaming?.type === "file" && renaming.p === p.name && renaming.f === f}
+            <input class="inline indented" bind:value={renameValue} on:keydown={(e) => e.key === "Enter" && commitRename()} on:blur={commitRename} autofocus />
+          {:else}
+            <div class="file" class:on={curProject === p.name && curFile === f}
+                 on:click={() => openFile(p.name, f)} on:contextmenu={(e) => openCtx(e, "file", p.name, f)}>{f}</div>
+          {/if}
         {/each}
       {/each}
     {/if}
@@ -187,12 +244,26 @@
       <div class="bar">
         <span class="path">{curProject} / {curFile}</span>
         <button class="run" on:click={runFile}>▶ 빌드/실행</button>
+        <button class="cmdset" on:click={() => (showCmdSettings = !showCmdSettings)} title="실행 명령 설정">⚙</button>
         {#if !viEnabled}
           <button class="vi" on:click={enableVi}>vi 키맵</button>
         {:else}
           <span class="vi-mode">vi: {viMode === "normal" ? "NORMAL" : "INSERT"}</span>
         {/if}
       </div>
+
+      {#if showCmdSettings}
+        <div class="cmd-settings editable">
+          <div class="cmd-head">실행 명령 설정 <span class="cmd-hint">%f=파일명, %e=확장자 제외</span></div>
+          <label>C99 (.c)<input value={cmds.c} on:input={(e) => { cmds.c = e.target.value; saveCmds(); }} /></label>
+          <label>Python3 (.py)<input value={cmds.py} on:input={(e) => { cmds.py = e.target.value; saveCmds(); }} /></label>
+          <label>Haskell (.hs)<input value={cmds.hs} on:input={(e) => { cmds.hs = e.target.value; saveCmds(); }} /></label>
+          <div class="cmd-actions">
+            <button class="reset" on:click={resetCmds}>기본값 복원</button>
+            <button on:click={() => (showCmdSettings = false)}>닫기</button>
+          </div>
+        </div>
+      {/if}
 
       <div class="edit-area">
         <div class="gutter">
@@ -230,8 +301,10 @@
 {#if ctx}
   <div class="ctxmenu" style="left:{ctx.x}px; top:{ctx.y}px">
     {#if ctx.type === "project"}
+      <button on:click={() => startRename("project", ctx.p)}>이름 변경</button>
       <button class="danger" on:click={() => { deleteProject(ctx.p); closeCtx(); }}>프로젝트 삭제</button>
     {:else}
+      <button on:click={() => startRename("file", ctx.p, ctx.f)}>이름 변경</button>
       <button class="danger" on:click={() => { deleteFile(ctx.p, ctx.f); closeCtx(); }}>파일 삭제</button>
     {/if}
   </div>
@@ -259,6 +332,15 @@
   .run { border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; padding: 4px 12px; }
   .vi { border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; }
   .vi-mode { font-family: var(--font-mono); font-size: 12px; color: var(--accent-2); }
+  .cmdset { border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; }
+  .cmd-settings { padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+  .cmd-head { font-size: 12px; color: var(--text-dim); }
+  .cmd-hint { font-family: var(--font-mono); opacity: 0.7; }
+  .cmd-settings label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-dim); }
+  .cmd-settings input { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-family: var(--font-mono); font-size: 13px; }
+  .cmd-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .cmd-actions button { border: 1px solid var(--line); border-radius: 6px; padding: 5px 14px; }
+  .cmd-actions .reset { border-color: var(--accent-2); color: var(--accent-2); }
   .edit-area { flex: 1; display: flex; min-height: 0; overflow: auto; }
   .gutter { padding: 24px 8px 24px 16px; text-align: right; color: var(--text-dim); font-family: var(--font-mono);
     font-size: 14px; line-height: 1.7; user-select: none; background: var(--surface); }

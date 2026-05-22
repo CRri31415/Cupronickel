@@ -1,14 +1,13 @@
 <script>
   // ───────────────────────────────────────────────────────────────────────
-  // 노트 모듈 — 마크다운 노트를 폴더로 정리.
+  // 노트 모듈 — 실제 폴더 구조 기반.
   //
-  // 인덱스(note/_index.json)로 폴더와 노트를 관리한다. 빈 폴더도 인덱스에 남으므로
-  // 파일을 안 만들어도 사라지지 않는다.
-  //   index = { folders: ["기본","과학",...], notes: [{folder, name}, ...] }
-  // 노트 본문: note/<folder>/<name>/<name>.md  (노트당 전용 폴더)
+  // 폴더는 디스크에 실제로 생성한다(빈 폴더도 .keep 없이 mkdir로 보존).
+  // 구조: note/<folder>/ 아래에 노트별 전용 폴더 <name>/<name>.md
+  // 폴더 목록 = note/ 의 하위 디렉토리, 노트 목록 = note/<folder>/ 의 하위 디렉토리.
   //
-  // 화면 상태(선택 노트/뷰)는 tab.state로 보존되어, 탭을 떠났다 와도 유지된다.
-  // 폴더/노트 생성은 자체 인라인 입력. 삭제는 우클릭 메뉴. 노트는 폴더 간 드래그 이동.
+  // 화면 상태(선택 노트/뷰)는 tab.state로 보존. 폴더/노트 생성은 인라인 입력,
+  // 이름 변경·삭제는 우클릭 메뉴. 노트는 폴더 간 드래그 이동.
   // ───────────────────────────────────────────────────────────────────────
   import { onMount } from "svelte";
   import { renderMarkdown } from "./markdown.js";
@@ -17,37 +16,39 @@
   export let tab;
   export let cn;
 
-  let folders = ["기본"];
-  let notes = [];           // [{folder, name}]
+  let tree = {};            // { folderName: [noteName, ...] }
   let loaded = false;
-
   let current = null;        // {folder, name}
   let content = "";
-  let viewMode = "edit";     // "edit" | "preview"
+  let viewMode = "edit";
   let html = "";
 
-  // 인라인 입력 상태
   let addingFolder = false, newFolderName = "";
-  let addingNoteIn = null,  newNoteName = "";   // 폴더명 또는 null
-
-  // 우클릭 메뉴
-  let ctx = null; // {x, y, type:"folder"|"note", target}
-
-  // 드래그
+  let addingNoteIn = null,  newNoteName = "";
+  let renaming = null;       // {type, folder, name}
+  let renameValue = "";
+  let ctx = null;
   let dragNote = null;
 
   onMount(async () => {
-    const idx = (await cn.storage.readJson("_index.json", null)) ?? { folders: ["기본"], notes: [] };
-    folders = idx.folders ?? ["기본"];
-    notes = idx.notes ?? [];
+    await refreshTree();
     loaded = true;
-    // 탭 상태 복원
     if (tab?.state?.current) {
       const c = tab.state.current;
-      if (notes.some((n) => n.folder === c.folder && n.name === c.name)) openNote(c, tab.state.viewMode);
+      if (tree[c.folder]?.includes(c.name)) openNote(c, tab.state.viewMode);
     }
   });
-  function saveIndex() { cn.storage.writeJson("_index.json", { folders, notes }); }
+
+  // 디스크에서 폴더/노트 구조를 읽어온다.
+  async function refreshTree() {
+    const t = {};
+    const folders = (await cn.storage.list()).filter((i) => i.is_dir);
+    for (const f of folders) {
+      const notes = (await cn.storage.list(f.name)).filter((i) => i.is_dir).map((i) => i.name);
+      t[f.name] = notes;
+    }
+    tree = t;
+  }
 
   const notePath = (n) => `${n.folder}/${n.name}/${n.name}.md`;
 
@@ -56,7 +57,6 @@
     content = (await cn.storage.readText(notePath(n))) ?? "";
     patchState(tab.id, { current: n, viewMode });
   }
-
   let saveTimer = null;
   function onEdit(v) {
     content = v;
@@ -64,64 +64,81 @@
     saveTimer = setTimeout(() => { if (current) cn.storage.writeText(notePath(current), content); }, 400);
   }
 
-  // --- 폴더 ---
+  // 폴더(실제 디렉토리 생성)
   function startAddFolder() { addingFolder = true; newFolderName = ""; }
-  function commitFolder() {
-    const name = newFolderName.trim();
-    if (name && !folders.includes(name)) { folders = [...folders, name]; saveIndex(); }
-    addingFolder = false;
+  async function commitFolder() {
+    const name = newFolderName.trim(); addingFolder = false;
+    if (!name || tree[name]) return;
+    await cn.storage.mkdir(name);     // 실제 폴더 생성
+    await refreshTree();
   }
-  function deleteFolder(folder) {
-    // 폴더와 그 안 노트 전부 삭제
-    for (const n of notes.filter((n) => n.folder === folder)) cn.storage.remove(`${n.folder}/${n.name}`);
-    notes = notes.filter((n) => n.folder !== folder);
-    folders = folders.filter((f) => f !== folder);
-    saveIndex();
-    if (current && current.folder === folder) { current = null; content = ""; }
+  async function deleteFolder(folder) {
+    await cn.storage.remove(folder);
+    await refreshTree();
+    if (current?.folder === folder) { current = null; content = ""; }
   }
 
-  // --- 노트 ---
+  // 노트(전용 폴더 + md 생성)
   function startAddNote(folder) { addingNoteIn = folder; newNoteName = ""; }
   async function commitNote() {
-    const folder = addingNoteIn;
-    const name = newNoteName.trim();
-    addingNoteIn = null;
+    const folder = addingNoteIn; const name = newNoteName.trim(); addingNoteIn = null;
     if (!name) return;
-    if (notes.some((n) => n.folder === folder && n.name === name)) { alert("같은 이름의 노트가 있습니다."); return; }
-    const n = { folder, name };
-    notes = [...notes, n]; saveIndex();
-    await cn.storage.writeText(notePath(n), `# ${name}\n\n`);
-    openNote(n);
+    if (tree[folder]?.includes(name)) { alert("같은 이름의 노트가 있습니다."); return; }
+    await cn.storage.writeText(`${folder}/${name}/${name}.md`, `# ${name}\n\n`);
+    await refreshTree();
+    openNote({ folder, name });
   }
-  function deleteNote(n) {
-    cn.storage.remove(`${n.folder}/${n.name}`);
-    notes = notes.filter((x) => !(x.folder === n.folder && x.name === n.name));
-    saveIndex();
-    if (current && current.folder === n.folder && current.name === n.name) { current = null; content = ""; }
+  async function deleteNote(n) {
+    await cn.storage.remove(`${n.folder}/${n.name}`);
+    await refreshTree();
+    if (current?.folder === n.folder && current?.name === n.name) { current = null; content = ""; }
   }
 
-  // --- 우클릭 메뉴 ---
-  function openCtx(e, type, target) { e.preventDefault(); ctx = { x: e.clientX, y: e.clientY, type, target }; }
+  // 이름 변경(우클릭 → 변경): 폴더/노트 모두 디렉토리 이동으로 처리
+  function startRename(type, folder, name) {
+    renaming = { type, folder, name }; renameValue = type === "folder" ? folder : name;
+    ctx = null;
+  }
+  async function commitRename() {
+    const r = renaming; renaming = null;
+    const v = renameValue.trim();
+    if (!v) return;
+    if (r.type === "folder") {
+      if (tree[v]) { alert("같은 폴더가 있습니다."); return; }
+      await cn.storage.mkdir(v);
+      for (const note of tree[r.folder]) {
+        const body = await cn.storage.readText(`${r.folder}/${note}/${note}.md`);
+        await cn.storage.writeText(`${v}/${note}/${note}.md`, body ?? "");
+      }
+      await cn.storage.remove(r.folder);
+      if (current?.folder === r.folder) current = { ...current, folder: v };
+    } else {
+      if (tree[r.folder]?.includes(v)) { alert("같은 노트가 있습니다."); return; }
+      const body = await cn.storage.readText(`${r.folder}/${r.name}/${r.name}.md`);
+      await cn.storage.writeText(`${r.folder}/${v}/${v}.md`, body ?? "");
+      await cn.storage.remove(`${r.folder}/${r.name}`);
+      if (current?.folder === r.folder && current?.name === r.name) current = { folder: r.folder, name: v };
+    }
+    await refreshTree();
+  }
+
+  // 우클릭 메뉴
+  function openCtx(e, type, folder, name) { e.preventDefault(); ctx = { x: e.clientX, y: e.clientY, type, folder, name }; }
   function closeCtx() { ctx = null; }
 
-  // --- 드래그(노트를 다른 폴더로) ---
+  // 드래그(노트 → 다른 폴더)
   function onDragStart(n) { dragNote = n; }
-  function onDropFolder(folder) {
+  async function onDropFolder(folder) {
     if (!dragNote || dragNote.folder === folder) { dragNote = null; return; }
-    const from = dragNote;
-    // 본문 이동: 새 경로에 쓰고 옛 폴더 삭제
-    cn.storage.readText(notePath(from)).then((body) => {
-      const moved = { folder, name: from.name };
-      cn.storage.writeText(notePath(moved), body ?? "");
-      cn.storage.remove(`${from.folder}/${from.name}`);
-      notes = notes.map((n) => (n.folder === from.folder && n.name === from.name ? moved : n));
-      saveIndex();
-      if (current && current.folder === from.folder && current.name === from.name) current = moved;
-    });
-    dragNote = null;
+    const from = dragNote; dragNote = null;
+    const body = await cn.storage.readText(`${from.folder}/${from.name}/${from.name}.md`);
+    await cn.storage.writeText(`${folder}/${from.name}/${from.name}.md`, body ?? "");
+    await cn.storage.remove(`${from.folder}/${from.name}`);
+    await refreshTree();
+    if (current?.folder === from.folder && current?.name === from.name) current = { folder, name: from.name };
   }
 
-  // --- 미리보기 --- (content/viewMode 변화에만 반응; html 갱신은 루프를 만들지 않음)
+  // 미리보기
   async function renderPreview(src) {
     let out = renderMarkdown(src, { imageSrc: (file) => file });
     if (cn.text.available()) out = await cn.text.render(out);
@@ -129,52 +146,50 @@
   }
   $: if (viewMode === "preview") renderPreview(content);
   function setView(m) { viewMode = m; patchState(tab.id, { current, viewMode: m }); }
-
   function onPreviewClick(e) {
     const a = e.target.closest("a.wikilink");
     if (a) {
       e.preventDefault();
-      const found = notes.find((n) => n.name === a.dataset.target);
-      if (found) openNote(found);
-      else alert(`'${a.dataset.target}' 노트를 찾을 수 없습니다.`);
+      for (const [folder, notes] of Object.entries(tree))
+        if (notes.includes(a.dataset.target)) { openNote({ folder, name: a.dataset.target }); return; }
+      alert(`'${a.dataset.target}' 노트를 찾을 수 없습니다.`);
     }
   }
-
-  $: byFolder = (() => { const m = {}; for (const f of folders) m[f] = []; for (const n of notes) (m[n.folder] ||= []).push(n); return m; })();
 </script>
 
 <svelte:window on:click={closeCtx} />
 
 <div class="note editable">
   <aside class="tree">
-    <div class="thead">
-      <span>노트</span>
-      <div class="thead-btns">
-        <button on:click={startAddFolder} title="새 폴더">📁+</button>
-      </div>
-    </div>
-
+    <div class="thead"><span>노트</span><button on:click={startAddFolder} title="새 폴더">📁+</button></div>
     {#if addingFolder}
       <input class="inline-input" bind:value={newFolderName} placeholder="폴더 이름"
         on:keydown={(e) => e.key === "Enter" && commitFolder()} on:blur={commitFolder} autofocus />
     {/if}
-
     {#if loaded}
-      {#each folders as folder (folder)}
+      {#each Object.entries(tree) as [folder, notes] (folder)}
         <div class="folder" on:contextmenu={(e) => openCtx(e, "folder", folder)}
              on:dragover|preventDefault on:drop={() => onDropFolder(folder)}>
-          <span class="fname">{folder}</span>
-          <button class="addnote" on:click={() => startAddNote(folder)} title="이 폴더에 새 노트">+</button>
+          {#if renaming?.type === "folder" && renaming.folder === folder}
+            <input class="rename" bind:value={renameValue} on:keydown={(e) => e.key === "Enter" && commitRename()} on:blur={commitRename} autofocus />
+          {:else}
+            <span class="fname">{folder}</span>
+            <button class="addnote" on:click={() => startAddNote(folder)} title="새 노트">+</button>
+          {/if}
         </div>
         {#if addingNoteIn === folder}
           <input class="inline-input indented" bind:value={newNoteName} placeholder="노트 이름"
             on:keydown={(e) => e.key === "Enter" && commitNote()} on:blur={commitNote} autofocus />
         {/if}
-        {#each byFolder[folder] as n (n.folder + "/" + n.name)}
-          <div class="leaf" class:on={current && current.folder === n.folder && current.name === n.name}
-               draggable="true" on:dragstart={() => onDragStart(n)}
-               on:contextmenu={(e) => openCtx(e, "note", n)}>
-            <button class="leaf-name" on:click={() => openNote(n)}>{n.name}</button>
+        {#each notes as name (folder + "/" + name)}
+          <div class="leaf" class:on={current?.folder === folder && current?.name === name}
+               draggable="true" on:dragstart={() => onDragStart({ folder, name })}
+               on:contextmenu={(e) => openCtx(e, "note", folder, name)}>
+            {#if renaming?.type === "note" && renaming.folder === folder && renaming.name === name}
+              <input class="rename" bind:value={renameValue} on:keydown={(e) => e.key === "Enter" && commitRename()} on:blur={commitRename} autofocus />
+            {:else}
+              <button class="leaf-name" on:click={() => openNote({ folder, name })}>{name}</button>
+            {/if}
           </div>
         {/each}
       {/each}
@@ -202,14 +217,15 @@
   </div>
 </div>
 
-<!-- 우클릭 메뉴 -->
 {#if ctx}
   <div class="ctxmenu" style="left:{ctx.x}px; top:{ctx.y}px">
     {#if ctx.type === "folder"}
-      <button on:click={() => { startAddNote(ctx.target); closeCtx(); }}>새 노트</button>
-      <button class="danger" on:click={() => { deleteFolder(ctx.target); closeCtx(); }}>폴더 삭제</button>
+      <button on:click={() => { startAddNote(ctx.folder); closeCtx(); }}>새 노트</button>
+      <button on:click={() => startRename("folder", ctx.folder)}>이름 변경</button>
+      <button class="danger" on:click={() => { deleteFolder(ctx.folder); closeCtx(); }}>폴더 삭제</button>
     {:else}
-      <button class="danger" on:click={() => { deleteNote(ctx.target); closeCtx(); }}>노트 삭제</button>
+      <button on:click={() => startRename("note", ctx.folder, ctx.name)}>이름 변경</button>
+      <button class="danger" on:click={() => { deleteNote({ folder: ctx.folder, name: ctx.name }); closeCtx(); }}>노트 삭제</button>
     {/if}
   </div>
 {/if}
@@ -217,10 +233,10 @@
 <style>
   .note { height: 100%; display: grid; grid-template-columns: 220px 1fr; box-sizing: border-box; }
   .tree { border-right: 1px solid var(--line); padding: 14px 10px; overflow: auto; }
-  .thead { display: flex; align-items: center; justify-content: space-between; font-size: 12px;
-    color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
-  .thead-btns button { border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: 12px; }
-  .inline-input { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--accent);
+  .thead { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  .thead button { border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: 12px; }
+  .inline-input, .rename { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--accent);
     border-radius: 6px; padding: 5px 8px; margin-bottom: 4px; font-family: var(--font-ui); }
   .inline-input.indented { width: calc(100% - 14px); margin-left: 14px; }
   .folder { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; padding: 3px 4px; border-radius: 6px; }
@@ -232,7 +248,6 @@
   .leaf.on { background: var(--surface-2); }
   .leaf-name { flex: 1; text-align: left; border: none; padding: 6px 8px; color: var(--text); cursor: pointer; }
   .leaf.on .leaf-name { color: var(--accent); }
-
   .pane { display: flex; flex-direction: column; min-width: 0; }
   .bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
   .path { color: var(--text-dim); font-size: 13px; }
@@ -248,12 +263,11 @@
   .preview :global(.wikilink) { color: var(--accent); cursor: pointer; text-decoration: underline; }
   .preview :global(.url) { color: var(--accent-2); }
   .preview :global(img) { max-width: 100%; border-radius: 6px; }
-  .preview :global(.smiles img) { background: #fff; border-radius: 6px; padding: 4px; }
+  .preview :global(.smiles svg) { background: #fff; border-radius: 6px; max-width: 100%; }
   .preview :global(.footnotes) { font-size: 13px; color: var(--text-dim); }
   .empty { display: grid; place-items: center; height: 100%; color: var(--text-dim); }
-
-  .ctxmenu { position: fixed; z-index: 100; background: var(--surface-2); border: 1px solid var(--line);
-    border-radius: 8px; padding: 4px; display: flex; flex-direction: column; min-width: 120px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .ctxmenu { position: fixed; z-index: 100; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 4px; display: flex; flex-direction: column; min-width: 120px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
   .ctxmenu button { border: none; text-align: left; padding: 8px 12px; border-radius: 5px; color: var(--text); }
   .ctxmenu button:hover { background: var(--surface); }
   .ctxmenu .danger { color: var(--danger); }

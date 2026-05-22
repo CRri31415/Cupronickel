@@ -131,12 +131,14 @@
             <option value="digital">디지털</option><option value="analog">아날로그</option>
           </select>
         </label>
-        <label class="chk"><input type="checkbox" checked={w.config.hour24} on:change={(e) => patchConfig(w.id, { hour24: e.target.checked })} />24시간제</label>
-        <label>폰트
-          <select value={w.config.font} on:change={(e) => patchConfig(w.id, { font: e.target.value })}>
-            <option value="mono">고정폭</option><option value="ui">기본</option>
-          </select>
-        </label>
+        {#if w.config.mode === "digital"}
+          <label class="chk"><input type="checkbox" checked={w.config.hour24} on:change={(e) => patchConfig(w.id, { hour24: e.target.checked })} />24시간제</label>
+          <label>폰트
+            <select value={w.config.font} on:change={(e) => patchConfig(w.id, { font: e.target.value })}>
+              <option value="mono">고정폭</option><option value="ui">기본</option>
+            </select>
+          </label>
+        {/if}
       {:else if w.type === "dday"}
         <label>이름<input value={w.config.label} on:input={(e) => patchConfig(w.id, { label: e.target.value })} /></label>
         <label>날짜<input type="date" value={w.config.date} on:change={(e) => patchConfig(w.id, { date: e.target.value })} /></label>
@@ -187,4 +189,6 @@
     border: 1px solid var(--line); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap;
     user-select: none; cursor: grab; box-shadow: 0 4px 12px rgba(0,0,0,0.25); overflow: hidden; }
   .postit:active { cursor: grabbing; }
+  .postit :global(.smiles svg), .postit :global(.smiles img) { max-width: 100%; height: auto; background: #fff; border-radius: 4px; }
+  .postit :global(.katex) { font-size: 0.95em; }
 </style>

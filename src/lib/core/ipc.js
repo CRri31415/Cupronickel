@@ -53,6 +53,12 @@ async function invoke(cmd, args) {
     }
     case "run_command":
       return { stdout: "(dev 모드에서는 명령을 실행하지 않습니다)", stderr: "", code: 0 };
+    case "make_dir": {
+      // dev: 빈 폴더 표시를 위해 placeholder 키를 둔다
+      memFiles.set(args.rel + "/.keep", "");
+      return;
+    }
+    case "open_data_folder": return;
     default: throw new Error("unknown command: " + cmd);
   }
 }
@@ -73,5 +79,7 @@ export const ipc = {
   // 폴더 나열 / 경로 삭제
   listDir: (rel) => invoke("list_dir", { rel }),
   deletePath: (rel) => invoke("delete_path", { rel }),
+  makeDir: (rel) => invoke("make_dir", { rel }),
+  openDataFolder: () => invoke("open_data_folder"),
   runCommand: (project, program, args) => invoke("run_command", { project, program, args }),
 };

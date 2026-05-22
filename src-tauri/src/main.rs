@@ -25,6 +25,8 @@ fn main() {
             storage::save_png,
             storage::list_dir,
             storage::delete_path,
+            storage::make_dir,
+            storage::open_data_folder,
             modules::list_modules,
             modules::install_module,
             modules::uninstall_module,

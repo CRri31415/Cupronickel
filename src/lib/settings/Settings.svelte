@@ -2,6 +2,7 @@
   // 설정 화면 — 표시/성능, 테마, (설치된) 모듈별 설정, 모듈 설치.
   import { settings, updateSettings } from "../core/settings.js";
   import { installed, install, meta, allModuleKeys } from "../core/modules.js";
+  import { ipc } from "../core/ipc.js";
 
   const COLOR_LABELS = {
     "--bg": "배경", "--surface": "패널", "--surface-2": "상위 패널",
@@ -34,6 +35,11 @@
       </select>
       <small>창 픽셀 크기를 고정합니다(전체화면 아님).</small>
     </label>
+    <div class="row">
+      <span>데이터 폴더</span>
+      <button class="folder-btn" on:click={() => ipc.openDataFolder()}>파일 탐색기에서 열기</button>
+      <small>설정·노트·카드 등 모든 데이터가 저장된 폴더를 엽니다.</small>
+    </div>
   </section>
 
   <section>
@@ -100,6 +106,7 @@
   .module-row .state { color: var(--text-dim); font-size: 12px; }
   button { border: 1px solid var(--line); border-radius: 6px; padding: 4px 14px; }
   button.primary { border-color: var(--accent); color: var(--accent); }
+  .folder-btn { border: 1px solid var(--line); border-radius: 6px; padding: 4px 12px; }
   select, input[type="checkbox"] { accent-color: var(--accent); }
   select { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 </style>
