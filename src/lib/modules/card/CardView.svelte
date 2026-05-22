@@ -57,9 +57,14 @@
   }
   function edit(id, field, val) { cards = cards.map((c) => (c.id === id ? { ...c, [field]: val } : c)); save(); }
   function remove(id) { cards = cards.filter((c) => c.id !== id); save(); }
-  function addDeck() {
-    const name = prompt("새 덱 이름:");
-    if (name && name.trim()) { activeDeck = name.trim(); }
+
+  // 덱 생성: 인라인 입력(메시지 창 대신)
+  let addingDeck = false, newDeckName = "";
+  function startAddDeck() { addingDeck = true; newDeckName = ""; }
+  function commitDeck() {
+    const name = newDeckName.trim();
+    if (name) activeDeck = name; // 카드를 추가하면 이 덱에 속하게 됨
+    addingDeck = false;
   }
 
   // --- 복습 ---
@@ -70,7 +75,7 @@
     curIndex = 0; showBack = false; mode = "review"; refreshPreview();
   }
   function curCard() { return cards.find((c) => c.id === queue[curIndex]); }
-  function refreshPreview() { const c = curCard(); if (c) preview = previewIntervals(c.fsrs); }
+  function refreshPreview() { const c = curCard(); if (c) { preview = previewIntervals(c.fsrs); renderFaces(c); } }
   function reveal() { showBack = true; }
   function rate(r) {
     if (!showBack) return;
@@ -80,6 +85,18 @@
     save();
     if (curIndex + 1 < queue.length) { curIndex += 1; showBack = false; refreshPreview(); }
     else { mode = "manage"; }
+  }
+
+  // 카드 앞/뒷면을 텍스트 확장(TeX/SMILES)으로 렌더 (설치 시)
+  let frontHtml = "", backHtml = "";
+  function escapeHtml(s) { return String(s).replace(/[&<>]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c])); }
+  async function renderFaces(c) {
+    if (cn.text.available()) {
+      frontHtml = await cn.text.render(escapeHtml(c.front));
+      backHtml = await cn.text.render(escapeHtml(c.back));
+    } else {
+      frontHtml = escapeHtml(c.front); backHtml = escapeHtml(c.back);
+    }
   }
 
   function onKey(e) {
@@ -113,7 +130,12 @@
             {#if dueCountOf(d) > 0}<span class="badge">{dueCountOf(d)}</span>{/if}
           </button>
         {/each}
-        <button class="new-deck" on:click={addDeck}>+ 덱</button>
+        {#if addingDeck}
+          <input class="inline-input" bind:value={newDeckName} placeholder="덱 이름"
+            on:keydown={(e) => e.key === "Enter" && commitDeck()} on:blur={commitDeck} autofocus />
+        {:else}
+          <button class="new-deck" on:click={startAddDeck}>+ 덱</button>
+        {/if}
       </aside>
 
       <!-- 카드 목록 -->
@@ -153,8 +175,8 @@
     <div class="review-stage">
       <div class="progress">{curIndex + 1} / {queue.length}</div>
       <div class="face">
-        <div class="front">{curCard()?.front}</div>
-        {#if showBack}<div class="divider"></div><div class="back">{curCard()?.back}</div>{/if}
+        <div class="front">{@html frontHtml}</div>
+        {#if showBack}<div class="divider"></div><div class="back">{@html backHtml}</div>{/if}
       </div>
       {#if !showBack}
         <button class="reveal" on:click={reveal}>뒷면 보기 (Space / Enter)</button>
@@ -183,6 +205,8 @@
   .dname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge { background: var(--accent); color: var(--bg); border-radius: 10px; font-size: 11px; padding: 0 7px; }
   .new-deck { margin-top: 8px; border: 1px dashed var(--line); border-radius: 6px; padding: 6px; color: var(--text-dim); }
+  .inline-input { background: var(--surface); color: var(--text); border: 1px solid var(--accent); border-radius: 6px; padding: 6px 8px; margin-top: 8px; font-family: var(--font-ui); }
+  .face :global(.smiles svg) { background: #fff; border-radius: 6px; }
 
   .cards-pane { padding: 20px 24px; overflow: auto; }
   header { display: flex; align-items: center; gap: 12px; }

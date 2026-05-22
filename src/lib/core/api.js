@@ -143,5 +143,9 @@ export function makeApi(moduleKey) {
     storage: makeStorage(moduleKey),
     text: textApi,
     exporter,
+    // 외부 명령 실행(에디터 모듈 전용). project=code/ 하위 폴더명.
+    exec: {
+      run: (project, program, args) => ipc.runCommand(project, program, args),
+    },
   };
 }

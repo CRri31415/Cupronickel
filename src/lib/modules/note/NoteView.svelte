@@ -121,14 +121,13 @@
     dragNote = null;
   }
 
-  // --- 미리보기 ---
-  async function renderPreview() {
-    const ctxObj = { imageSrc: (file) => file };
-    let out = renderMarkdown(content, ctxObj);
+  // --- 미리보기 --- (content/viewMode 변화에만 반응; html 갱신은 루프를 만들지 않음)
+  async function renderPreview(src) {
+    let out = renderMarkdown(src, { imageSrc: (file) => file });
     if (cn.text.available()) out = await cn.text.render(out);
     html = out;
   }
-  $: if (viewMode === "preview") renderPreview();
+  $: if (viewMode === "preview") renderPreview(content);
   function setView(m) { viewMode = m; patchState(tab.id, { current, viewMode: m }); }
 
   function onPreviewClick(e) {

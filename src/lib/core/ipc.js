@@ -51,6 +51,8 @@ async function invoke(cmd, args) {
       }
       return;
     }
+    case "run_command":
+      return { stdout: "(dev 모드에서는 명령을 실행하지 않습니다)", stderr: "", code: 0 };
     default: throw new Error("unknown command: " + cmd);
   }
 }
@@ -71,4 +73,5 @@ export const ipc = {
   // 폴더 나열 / 경로 삭제
   listDir: (rel) => invoke("list_dir", { rel }),
   deletePath: (rel) => invoke("delete_path", { rel }),
+  runCommand: (project, program, args) => invoke("run_command", { project, program, args }),
 };

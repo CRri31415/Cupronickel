@@ -30,8 +30,8 @@ const LOADERS = {
   calendar: () => import("../modules/calendar/module.js"),
   note:     () => import("../modules/note/module.js"),
   textext:  () => import("../modules/textext/module.js"),
-  // code:  () => import("../modules/code/module.js"),
-  // sheet: () => import("../modules/sheet/module.js"),
+  code:     () => import("../modules/code/module.js"),
+  sheet:    () => import("../modules/sheet/module.js"),
 };
 
 // 설치 메타데이터(아이콘/이름 등)는 가벼우므로 미리 둔다.

@@ -79,13 +79,16 @@
     const dist = Math.hypot(dx, dy) || 1;
     const ux = dx / dist, uy = dy / dist;
     const ra = radius(a), rb = radius(b);
-    return {
-      e,
-      x1: a.x + ux * ra,           // 시작 노드 가장자리
-      y1: a.y + uy * ra,
-      x2: b.x - ux * (rb + 4),     // 끝 노드 가장자리(+여유로 화살표 머리가 보이게)
-      y2: b.y - uy * (rb + 4),
-    };
+    const x1 = a.x + ux * ra;
+    const y1 = a.y + uy * ra;
+    const x2 = b.x - ux * (rb + 2);
+    const y2 = b.y - uy * (rb + 2);
+    // 화살표 머리(유향) — marker 대신 직접 polygon 좌표 계산(확실히 보이도록)
+    const ah = 12; // 화살표 길이
+    const aw = 6;  // 화살표 폭
+    const px = -uy, py = ux; // 수직 벡터
+    const arrow = `${x2},${y2} ${x2 - ux*ah + px*aw},${y2 - uy*ah + py*aw} ${x2 - ux*ah - px*aw},${y2 - uy*ah - py*aw}`;
+    return { e, x1, y1, x2, y2, arrow };
   }).filter(Boolean);
 
   // 노드 편집
@@ -179,19 +182,19 @@
         <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
           <path d="M40 0H0V40" fill="none" stroke="var(--line)" stroke-width="0.5"/>
         </pattern>
-        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="14" markerHeight="14"
-                orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-          <path d="M0 0L10 5L0 10z" fill="#9a9079"/>
-        </marker>
       </defs>
       <rect width={W} height={H} fill="url(#grid)" opacity="0.5"/>
 
       {#each edgeLines as L (L.e.id)}
+        {@const col = selectedEdge===L.e.id ? "var(--accent)" : "var(--text-dim)"}
         <line x1={L.x1} y1={L.y1} x2={L.x2} y2={L.y2}
-          stroke={selectedEdge===L.e.id ? "var(--accent)" : "var(--text-dim)"} stroke-width={L.e.width}
-          marker-end={L.e.directed ? "url(#arrow)" : ""}
+          stroke={col} stroke-width={L.e.width}
           on:click|stopPropagation={() => selectEdge(L.e.id)}
           class="edge" />
+        {#if L.e.directed}
+          <polygon points={L.arrow} fill={col}
+            on:click|stopPropagation={() => selectEdge(L.e.id)} class="edge" />
+        {/if}
       {/each}
 
       {#each nodes as n (n.id)}

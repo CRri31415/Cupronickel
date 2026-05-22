@@ -6,6 +6,7 @@ mod paths;
 mod storage;
 mod modules;
 mod window;
+mod exec;
 
 fn main() {
     tauri::Builder::default()
@@ -28,6 +29,7 @@ fn main() {
             modules::install_module,
             modules::uninstall_module,
             window::set_window_size,
+            exec::run_command,
         ])
         .run(tauri::generate_context!())
         .expect("Cupronickel 실행 중 오류");

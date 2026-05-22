@@ -76,8 +76,11 @@
   let descPreview = "";
   $: if (draft) renderDesc(draft.desc);
   async function renderDesc(d) {
-    if (cn.text.available() && d) descPreview = await cn.text.render(escapeHtmlLocal(d));
-    else descPreview = "";
+    if (cn.text.available() && d) {
+      // 달력 설명은 TeX만 지원. smiles 블록은 제거(달력에선 이미지 생성이 불안정).
+      const noSmiles = d.replace(/```smiles[\s\S]*?```/g, "");
+      descPreview = await cn.text.render(escapeHtmlLocal(noSmiles));
+    } else descPreview = "";
   }
   function escapeHtmlLocal(s) { return String(s).replace(/[&<>]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c])); }
 
@@ -168,6 +171,8 @@
           <div class="ev-main">
             <div class="ev-title">{e.title}</div>
             <div class="ev-date">{e.start}{e.end && e.end !== e.start ? ` ~ ${e.end}` : ""}</div>
+            {#if e.tags.length}<div class="ev-tags">{#each e.tags as t}<span class="tag">{t}</span>{/each}</div>{/if}
+            {#if e.desc}<div class="ev-desc">{e.desc.replace(/```smiles[\s\S]*?```/g, "").slice(0, 80)}</div>{/if}
           </div>
         </div>
       {/each}
@@ -235,6 +240,9 @@
   .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
   .ev-title { font-size: 13px; }
   .ev-date { font-size: 11px; color: var(--text-dim); }
+  .ev-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+  .ev-tags .tag { font-size: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--text-dim); }
+  .ev-desc { font-size: 11px; color: var(--text-dim); margin-top: 3px; opacity: 0.8; }
 
   .editor {
     position: absolute; top: 12px; right: 254px; width: 260px;
