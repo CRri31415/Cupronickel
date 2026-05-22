@@ -74,9 +74,16 @@
 
 ## 5. Workspace 렌더 (`src/lib/shell/Workspace.svelte`)
 
-- `main`/`settings`는 코어 컴포넌트를 직접 렌더.
-- 모듈 탭은 `getManifest(key)` → `manifest.load()`로 컴포넌트를 동적 로드.
-- 분할(`splitTabId`)이 있으면 좌/우 두 패널을 렌더.
+- 본 적 있는 탭을 **keep-alive로 마운트 유지**하고 CSS로 표시/숨김만 토글한다.
+  탭을 떠났다 와도 컴포넌트 내부 상태(노트 선택, 그래프 보드 편집 위치 등)가 보존된다.
+- 추가로 모듈은 화면 상태를 `tab.state`(`patchState`)에 저장해 비활성→재마운트 시에도 복원한다.
+- 분할(`splitTabId`)은 좌/우 두 패널을 CSS order로 배치한다.
+
+### 5-1. 분류 폴더의 영속화
+
+- 빈 폴더는 디스크에 안 남으므로, 폴더 목록을 인덱스 파일로 관리한다
+  (노트 `_index.json`, 메모 `_folders.json`, 암기는 카드의 deck 필드).
+  덕분에 파일을 만들지 않아도 폴더가 사라지지 않는다.
 
 ## 6. 테마 / 모션 (`src/lib/core/settings.js`, `src/app.css`)
 

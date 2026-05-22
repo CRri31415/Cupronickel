@@ -179,8 +179,9 @@
         <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
           <path d="M40 0H0V40" fill="none" stroke="var(--line)" stroke-width="0.5"/>
         </pattern>
-        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-          <path d="M0 0L10 5L0 10z" fill="var(--text)"/>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="14" markerHeight="14"
+                orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+          <path d="M0 0L10 5L0 10z" fill="#9a9079"/>
         </marker>
       </defs>
       <rect width={W} height={H} fill="url(#grid)" opacity="0.5"/>

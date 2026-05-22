@@ -24,7 +24,6 @@
   let year = today.getFullYear();
   let month = today.getMonth(); // 0-base
 
-  let selected = null;     // 편집 중 일정
   let filterTag = "";      // 태그 필터
 
   let _id = 0;
@@ -42,27 +41,45 @@
   function prevMonth() { if (--month < 0) { month = 11; year--; } }
   function nextMonth() { if (++month > 11) { month = 0; year++; } }
 
-  // --- 일정 편집 ---
+  // --- 일정 편집(draft 방식: 적용 버튼을 눌러야 반영) ---
+  let draft = null;        // 편집 중인 임시 사본
+  let isNew = false;       // 새로 만든 일정인지(취소 시 폐기)
+
   function addEvent(dateStr) {
-    const e = { id: eid(), title: "새 일정", start: dateStr, end: dateStr, importance: 2, tags: [], desc: "", followsId: null };
-    events = [...events, e];
-    selected = e;
-    save();
+    draft = { id: eid(), title: "새 일정", start: dateStr, end: dateStr, importance: 2, tags: [], desc: "", followsId: null };
+    isNew = true;
   }
-  function patch(patchObj) {
-    if (!selected) return;
-    selected = { ...selected, ...patchObj };
-    events = events.map((e) => (e.id === selected.id ? selected : e));
+  function openEdit(e) { draft = { ...e, tags: [...e.tags] }; isNew = false; }
+  function dpatch(p) { draft = { ...draft, ...p }; }
+  function setTags(str) { dpatch({ tags: str.split(",").map((t) => t.trim()).filter(Boolean) }); }
+
+  function applyDraft() {
+    if (!draft) return;
+    if (events.some((e) => e.id === draft.id)) {
+      events = events.map((e) => (e.id === draft.id ? draft : e));
+    } else {
+      events = [...events, draft];
+    }
     save();
+    draft = null; isNew = false;
   }
+  function cancelDraft() { draft = null; isNew = false; }
+
   function removeEvent(id) {
     events = events.filter((e) => e.id !== id);
-    // 이 일정을 후속으로 가리키던 것들 정리
     events = events.map((e) => (e.followsId === id ? { ...e, followsId: null } : e));
-    if (selected?.id === id) selected = null;
     save();
+    draft = null; isNew = false;
   }
-  function setTags(str) { patch({ tags: str.split(",").map((t) => t.trim()).filter(Boolean) }); }
+
+  // 설명 미리보기(TeX 적용) — 텍스트 확장이 있으면 렌더
+  let descPreview = "";
+  $: if (draft) renderDesc(draft.desc);
+  async function renderDesc(d) {
+    if (cn.text.available() && d) descPreview = await cn.text.render(escapeHtmlLocal(d));
+    else descPreview = "";
+  }
+  function escapeHtmlLocal(s) { return String(s).replace(/[&<>]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c])); }
 
   // --- 월 그리드 + 히트맵 ---
   $: firstDay = new Date(year, month, 1).getDay();
@@ -132,7 +149,7 @@
             <span class="num" class:today={day === today.getDate() && month === today.getMonth() && year === today.getFullYear()}>{day}</span>
             {#each (eventsByDate[key] || []).slice(0, 3) as e (e.id)}
               <div class="chip" style="border-left:3px solid {IMP_COLORS[e.importance]}"
-                   on:click={() => (selected = e)} title={e.title}>{e.title}</div>
+                   on:click={() => openEdit(e)} title={e.title}>{e.title}</div>
             {/each}
           {/if}
         </div>
@@ -146,7 +163,7 @@
     <h3>일정 ({sortedEvents.length})</h3>
     <div class="ev-list">
       {#each sortedEvents as e (e.id)}
-        <div class="ev" class:sel={selected?.id === e.id} on:click={() => (selected = e)}>
+        <div class="ev" class:sel={draft?.id === e.id} on:click={() => openEdit(e)}>
           <span class="dot" style="background:{IMP_COLORS[e.importance]}"></span>
           <div class="ev-main">
             <div class="ev-title">{e.title}</div>
@@ -157,32 +174,36 @@
     </div>
   </aside>
 
-  <!-- 일정 편집 패널 -->
-  {#if selected}
+  <!-- 일정 편집 패널 (draft: 적용을 눌러야 반영) -->
+  {#if draft}
     <div class="editor">
-      <h3>일정 편집</h3>
-      <label>제목<input value={selected.title} on:input={(e) => patch({ title: e.target.value })} /></label>
+      <h3>{isNew ? "새 일정" : "일정 편집"}</h3>
+      <label>제목<input value={draft.title} on:input={(e) => dpatch({ title: e.target.value })} /></label>
       <div class="dates">
-        <label>시작<input type="date" value={selected.start} on:change={(e) => patch({ start: e.target.value })} /></label>
-        <label>종료<input type="date" value={selected.end} on:change={(e) => patch({ end: e.target.value })} /></label>
+        <label>시작<input type="date" value={draft.start} on:change={(e) => dpatch({ start: e.target.value })} /></label>
+        <label>종료<input type="date" value={draft.end} on:change={(e) => dpatch({ end: e.target.value })} /></label>
       </div>
       <label>중요도
-        <select value={selected.importance} on:change={(e) => patch({ importance: Number(e.target.value) })}>
+        <select value={draft.importance} on:change={(e) => dpatch({ importance: Number(e.target.value) })}>
           {#each [1,2,3,4] as i}<option value={i}>{IMP_LABELS[i]}</option>{/each}
         </select>
       </label>
-      <label>태그(쉼표 구분)<input value={selected.tags.join(", ")} on:input={(e) => setTags(e.target.value)} /></label>
+      <label>태그(쉼표 구분)<input value={draft.tags.join(", ")} on:input={(e) => setTags(e.target.value)} /></label>
       <label>후속 일정
-        <select value={selected.followsId ?? ""} on:change={(e) => patch({ followsId: e.target.value || null })}>
+        <select value={draft.followsId ?? ""} on:change={(e) => dpatch({ followsId: e.target.value || null })}>
           <option value="">없음</option>
-          {#each events.filter((x) => x.id !== selected.id && x.start >= selected.start) as x}<option value={x.id}>{x.title}</option>{/each}
+          {#each events.filter((x) => x.id !== draft.id && x.start >= draft.start) as x}<option value={x.id}>{x.title}</option>{/each}
         </select>
       </label>
-      <label>설명<textarea value={selected.desc} on:input={(e) => patch({ desc: e.target.value })}></textarea></label>
+      <label>설명<textarea value={draft.desc} on:input={(e) => dpatch({ desc: e.target.value })}></textarea></label>
+      {#if descPreview}<div class="desc-preview">{@html descPreview}</div>{/if}
       <div class="ed-actions">
-        <button class="danger" on:click={() => removeEvent(selected.id)}>삭제</button>
-        <button on:click={() => (selected = null)}>닫기</button>
+        <button class="apply" on:click={applyDraft}>적용</button>
+        <button on:click={cancelDraft}>취소</button>
       </div>
+      {#if !isNew}
+        <button class="danger del-opt" on:click={() => removeEvent(draft.id)}>이 일정 삭제</button>
+      {/if}
     </div>
   {/if}
 </div>
@@ -230,5 +251,8 @@
   .dates { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .ed-actions { display: flex; gap: 6px; margin-top: 4px; }
   .ed-actions button { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 5px; }
+  .ed-actions .apply { border-color: var(--accent); color: var(--accent); }
+  .del-opt { margin-top: 8px; width: 100%; background: none; border: 1px solid var(--danger); color: var(--danger); border-radius: 6px; padding: 5px; }
+  .desc-preview { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: 12px; line-height: 1.6; }
   .danger { color: var(--danger); border-color: var(--danger) !important; }
 </style>
