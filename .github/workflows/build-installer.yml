@@ -1,0 +1,57 @@
+# Cupronickel — Windows 설치 프로그램 자동 빌드
+#
+# main에 푸시되면(또는 Actions 탭에서 수동 실행하면) 윈도우 가상머신이
+# 설치 프로그램(.exe)을 만들어 Artifacts로 올려준다. 내 컴퓨터엔 아무것도 설치 불필요.
+#
+# 사용법:
+#   1) 이 프로젝트를 GitHub 저장소(main)에 올린다.
+#   2) 끝나면 실행 결과 페이지 하단 "Artifacts"에서 설치 파일을 내려받는다.
+#   (수동으로 다시 돌리려면 Actions 탭 → build-installer → Run workflow)
+
+name: build-installer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      # 액션들을 최신 메이저로 사용(Node20 deprecation 경고 제거)
+      - uses: actions/checkout@v5
+
+      # 화면(프론트엔드) 빌드용 Node
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      # 본체(Rust) 빌드용 툴체인 (windows-latest엔 MSVC가 이미 있음)
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Rust 빌드 캐시(다음 빌드를 빠르게)
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 프론트엔드 의존성 설치
+        run: npm install
+
+      - name: 설치 프로그램 빌드
+        run: npm run tauri build
+
+      # 산출물 경로를 로그에 남겨 디버깅을 쉽게 한다(실패해도 확인 가능).
+      - name: 산출물 확인
+        if: always()
+        shell: pwsh
+        run: |
+          $p = "src-tauri/target/release/bundle/nsis"
+          if (Test-Path $p) { Get-ChildItem $p } else { Write-Host "NSIS 산출물 폴더 없음: $p" }
+
+      - name: 설치 파일 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cupronickel-Windows-Installer
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error

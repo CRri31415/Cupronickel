@@ -1,0 +1,66 @@
+/* app.css — 쿠프로니켈 기본 테마
+ *
+ * 디자인 방향(기획서): 최대한의 미니멀리즘 + 카세트 퓨처리즘 어스톤 + 낮은 채도.
+ * 모든 색/폰트는 CSS 변수로 노출되어 테마 설정에서 한 번에 교체된다(lib/core/theme.js).
+ * 애니메이션은 --motion 변수로 전역 토글한다. 끄면 transition 시간이 0이 되어
+ * "처음부터 없었던 것처럼" 동작한다(기획서의 최적화 요구).
+ */
+
+:root {
+  /* --- 카세트 퓨처리즘 어스톤 (기본 테마) --- */
+  --bg:        #1c1a16; /* 짙은 흙빛 배경 */
+  --surface:   #262219; /* 패널 */
+  --surface-2: #2f2a20; /* 상위 패널/탭 */
+  --line:      #3b352a; /* 경계선 */
+  --text:      #d8cdb8; /* 본문(바랜 미색) */
+  --text-dim:  #9a9079; /* 보조 텍스트 */
+  --accent:    #b08454; /* 구리/황토 강조 */
+  --accent-2:  #6f7d63; /* 청동 녹빛 */
+  --danger:    #a8694e;
+
+  /* --- 타이포 --- */
+  --font-ui:   "Iosevka", "Pretendard", "Segoe UI", sans-serif;
+  --font-mono: "Iosevka", "Consolas", monospace;
+  --font-serif:"Times New Roman", serif; /* 시트 모듈 기본 */
+
+  /* --- 모션 (0s = 애니메이션 꺼짐) --- */
+  --motion: 140ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* --- 셸 치수 --- */
+  --sidebar-w: 52px;
+  --tabbar-h:  38px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  /* 데스크톱 앱이므로 본문 텍스트 외 드래그/선택을 막아 산만함을 줄인다. */
+  user-select: none;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--motion) var(--motion-ease),
+              border-color var(--motion) var(--motion-ease);
+}
+button:hover { background: var(--surface-2); }
+
+/* 모션 끄기: 모든 transition/animation을 즉시 처리 */
+:root[data-motion="off"] * {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+}
+
+.editable { user-select: text; }
