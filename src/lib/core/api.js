@@ -108,19 +108,26 @@ const exporter = {
    */
   svgToPngDataUrl(svgEl, scale = 2) {
     return new Promise((resolve, reject) => {
-      const xml = new XMLSerializer().serializeToString(svgEl);
+      const vb = svgEl.viewBox.baseVal;
+      const w = vb.width || svgEl.clientWidth;
+      const h = vb.height || svgEl.clientHeight;
+      // 직렬화 전에 width/height/viewBox를 명시한 복제본을 만든다.
+      // (원본 viewBox의 x/y 오프셋까지 반영되어 모든 노드가 잘리지 않고 담긴다.)
+      const clone = svgEl.cloneNode(true);
+      clone.setAttribute("width", w);
+      clone.setAttribute("height", h);
+      clone.setAttribute("viewBox", `${vb.x} ${vb.y} ${w} ${h}`);
+      const xml = new XMLSerializer().serializeToString(clone);
       const svgBlob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(svgBlob);
       const img = new Image();
       img.onload = () => {
-        const w = svgEl.viewBox.baseVal.width || svgEl.clientWidth;
-        const h = svgEl.viewBox.baseVal.height || svgEl.clientHeight;
         const canvas = document.createElement("canvas");
         canvas.width = w * scale;
         canvas.height = h * scale;
-        const ctx = canvas.getContext("2d");
-        ctx.scale(scale, scale);
-        ctx.drawImage(img, 0, 0);
+        const cx = canvas.getContext("2d");
+        cx.scale(scale, scale);
+        cx.drawImage(img, 0, 0, w, h);
         URL.revokeObjectURL(url);
         resolve(canvas.toDataURL("image/png"));
       };
@@ -149,7 +156,7 @@ export function makeApi(moduleKey) {
     exporter,
     // 외부 명령 실행(에디터 모듈 전용). project=code/ 하위 폴더명.
     exec: {
-      build: (project, program, args) => ipc.runBuild(project, program, args),
+      build: (project, cmdLine) => ipc.runBuild(project, cmdLine),
       runInTerminal: (project, cmdLine) => ipc.runInTerminal(project, cmdLine),
     },
   };

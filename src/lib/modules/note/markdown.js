@@ -64,6 +64,21 @@ export function renderMarkdown(md, ctx) {
   while (i < lines.length) {
     const line = lines[i];
 
+    // 디스플레이 수식 블록: 한 줄이 $$ 로 시작/끝나거나, $$ 만 있는 줄로 둘러싸인 경우.
+    // 텍스트 확장이 처리하도록 원형($$...$$)을 한 덩어리로 보존하고 <p>로 감싸지 않는다.
+    if (/^\s*\$\$/.test(line)) {
+      // 같은 줄에서 닫히는가?
+      const single = line.match(/^\s*\$\$(.*)\$\$\s*$/);
+      if (single) { out.push(`$$${single[1]}$$`); i++; continue; }
+      // 여러 줄: 닫는 $$ 까지 모은다
+      const buf = [line.replace(/^\s*\$\$/, "")];
+      i++;
+      while (i < lines.length && !/\$\$\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
+      if (i < lines.length) { buf.push(lines[i].replace(/\$\$\s*$/, "")); i++; }
+      out.push(`$$${buf.join("\n")}$$`);
+      continue;
+    }
+
     // 코드블록 ```
     if (/^```/.test(line)) {
       const lang = line.slice(3).trim();

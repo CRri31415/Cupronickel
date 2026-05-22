@@ -14,6 +14,22 @@
     const theme = { ...$settings.theme, vars: { ...$settings.theme.vars, [key]: value } };
     updateSettings({ theme });
   }
+
+  // vi 키맵 활성화 게이트
+  let viGate = false, viGateInput = "", gateError = "";
+  // 다양한 vi 저장+종료 명령(콜론 포함). :wq, :x, :wq!, :wqa, ZZ 등.
+  const QUIT_CMDS = [":wq", ":x", ":wq!", ":x!", ":wqa", ":wqa!", ":xa", "zz"];
+  function checkGate() {
+    const v = viGateInput.trim().toLowerCase();
+    if (QUIT_CMDS.includes(v)) {
+      updateSettings({ editor: { ...$settings.editor, vi: true } });
+      viGate = false; viGateInput = ""; gateError = "";
+    } else if (v === "wq" || v === "x") {
+      gateError = "콜론(:)을 포함해야 합니다. 노멀 모드에서 콜론을 먼저 입력해 명령 모드로 들어갑니다.";
+    } else {
+      gateError = "올바른 vi 저장+종료 명령이 아닙니다.";
+    }
+  }
 </script>
 
 <div class="settings editable">
@@ -67,7 +83,32 @@
           <option value="absolute">절대</option>
         </select>
       </label>
+      <div class="row">
+        <span>vi 키맵</span>
+        {#if $settings.editor.vi}
+          <button class="folder-btn" on:click={() => updateSettings({ editor: { ...$settings.editor, vi: false } })}>사용 중 — 끄기</button>
+        {:else}
+          <button class="folder-btn" on:click={() => (viGate = true)}>켜기</button>
+        {/if}
+        <small>vi 사용자를 위한 모달/노멀/인서트 키맵을 켭니다.</small>
+      </div>
     </section>
+  {/if}
+
+  {#if viGate}
+    <div class="modal-bg" on:click={() => (viGate = false)}>
+      <div class="modal" on:click|stopPropagation>
+        <h3>vi 키맵 활성화</h3>
+        <p>vi에 익숙한지 확인합니다. <strong>노멀 모드에서 저장 후 종료하는 명령</strong>을 콜론(:)까지 포함해 입력하세요. (예: 콜론 다음 wq)</p>
+        <input bind:value={viGateInput} on:keydown={(e) => e.key === "Enter" && checkGate()}
+          placeholder="여기에 입력" autofocus />
+        {#if gateError}<span class="gate-err">{gateError}</span>{/if}
+        <div class="modal-actions">
+          <button class="ok" on:click={checkGate}>확인</button>
+          <button on:click={() => { viGate = false; gateError = ""; }}>취소</button>
+        </div>
+      </div>
+    </div>
   {/if}
 
   <section>
@@ -107,6 +148,15 @@
   button { border: 1px solid var(--line); border-radius: 6px; padding: 4px 14px; }
   button.primary { border-color: var(--accent); color: var(--accent); }
   .folder-btn { border: 1px solid var(--line); border-radius: 6px; padding: 4px 12px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: grid; place-items: center; z-index: 200; }
+  .modal { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 22px; width: 380px; display: flex; flex-direction: column; gap: 12px; }
+  .modal h3 { margin: 0; }
+  .modal p { margin: 0; color: var(--text-dim); font-size: 13px; line-height: 1.6; }
+  .modal input { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-family: var(--font-mono); }
+  .gate-err { color: var(--danger); font-size: 12px; }
+  .modal-actions { display: flex; gap: 8px; }
+  .modal-actions button { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 7px; }
+  .modal-actions .ok { border-color: var(--accent); color: var(--accent); }
   select, input[type="checkbox"] { accent-color: var(--accent); }
   select { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 </style>

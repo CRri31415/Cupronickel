@@ -18,7 +18,7 @@ const DEFAULTS = {
     fontUi: '"Iosevka","Pretendard","Segoe UI",sans-serif',
     fontMono: '"Iosevka","Consolas",monospace',
   },
-  editor: { lineNumbers: "hybrid" }, // "hybrid" | "absolute"
+  editor: { lineNumbers: "hybrid", vi: false }, // lineNumbers: "hybrid"|"absolute", vi: vi 키맵 사용
 };
 
 export const settings = writable(DEFAULTS);

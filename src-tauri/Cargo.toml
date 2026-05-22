@@ -1,6 +1,6 @@
 [package]
 name = "cupronickel"
-version = "0.2.0-alpha"
+version = "0.10.0-alpha"
 description = "통합 생산성 소프트웨어"
 authors = ["Cupronickel"]
 license = "GPL-2.0-only"

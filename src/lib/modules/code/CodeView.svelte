@@ -21,8 +21,11 @@
   let output = "";
   let taEl, hlEl;
 
-  // vi
-  let viEnabled = false, viMode = "insert", viGate = false, viGateInput = "";
+  // vi 키맵 — 전역 설정($settings.editor.vi)을 따른다. 모드: normal/insert/command.
+  let viMode = "normal";
+  let viCommand = "";        // 명령 모드(:) 입력 버퍼
+  $: viOn = $settings.editor?.vi ?? false;
+  $: if (!viOn) viMode = "insert"; // vi 꺼져 있으면 항상 일반 입력
 
   // 인라인 입력 / 우클릭
   let addingProject = false, newProjName = "";
@@ -69,13 +72,18 @@
 
   // 프로젝트/파일
   function startAddProject() { addingProject = true; newProjName = ""; }
+  let _committing = false;
   async function commitProject() {
+    if (_committing) return; _committing = true;
     const n = newProjName.trim(); addingProject = false;
     if (n && !projects.some((p) => p.name === n)) { await cn.storage.mkdir(n); projects = [...projects, { name: n, files: [] }]; saveIndex(); }
+    setTimeout(() => (_committing = false), 50);
   }
   function startAddFile(p) { addingFile = p; newFileName = ""; }
   async function commitFile() {
+    if (_committing) return; _committing = true;
     const p = addingFile; const f = newFileName.trim(); addingFile = false;
+    setTimeout(() => (_committing = false), 50);
     if (!f) return;
     const proj = projects.find((x) => x.name === p);
     if (proj.files.includes(f)) { alert("같은 파일이 있습니다."); return; }
@@ -126,16 +134,13 @@
   async function buildAndRun() {
     const lang = langOf(curFile);
     if (!lang) { output = "지원 언어(.c/.py/.hs)가 아닙니다."; return; }
-    // 1) 빌드(콘솔 출력)
     output = "빌드 중...";
     const buildStr = subst(cmds[lang].build);
-    const isWin = navigator.userAgent.includes("Windows");
     try {
-      const r = await cn.exec.build(curProject, isWin ? "cmd" : "sh", isWin ? ["/c", buildStr] : ["-c", buildStr]);
+      const r = await cn.exec.build(curProject, buildStr);
       output = `$ ${buildStr}\n` + (r.stdout || "") + (r.stderr ? "\n" + r.stderr : "") + `\n[빌드 종료 코드 ${r.code}]`;
       if (r.code !== 0) { output += "\n빌드 실패로 실행하지 않습니다."; return; }
     } catch (e) { output = "빌드 실패: " + e; return; }
-    // 2) 실행(새 터미널 창)
     const runStr = subst(cmds[lang].run);
     try {
       await cn.exec.runInTerminal(curProject, runStr);
@@ -147,9 +152,8 @@
     if (!lang) { output = "지원 언어가 아닙니다."; return; }
     output = "빌드 중...";
     const buildStr = subst(cmds[lang].build);
-    const isWin = navigator.userAgent.includes("Windows");
     try {
-      const r = await cn.exec.build(curProject, isWin ? "cmd" : "sh", isWin ? ["/c", buildStr] : ["-c", buildStr]);
+      const r = await cn.exec.build(curProject, buildStr);
       output = `$ ${buildStr}\n` + (r.stdout || "") + (r.stderr ? "\n" + r.stderr : "") + `\n[종료 코드 ${r.code}]`;
     } catch (e) { output = "빌드 실패: " + e; }
   }
@@ -179,7 +183,7 @@
 
   // 자동 들여쓰기 + 탭 + vi
   function onKeydown(e) {
-    if (viEnabled && handleVi(e)) return;
+    if (viOn && handleVi(e)) return;
     const ta = e.target;
     if (e.key === "Enter") {
       e.preventDefault();
@@ -199,21 +203,81 @@
     }
   }
 
-  // vi 키맵
-  function enableVi() { viGate = true; viGateInput = ""; }
-  function checkGate() {
-    if (viGateInput.trim() === ":wq") { viEnabled = true; viMode = "insert"; viGate = false; }
-    else alert("정확한 vi 종료 명령을 입력해야 활성화됩니다.");
+  // vi 키맵 구현. true 반환 시 기본 동작 차단.
+  let _lastKey = "";
+  function setCaret(p) { queueMicrotask(() => { if (taEl) { taEl.selectionStart = taEl.selectionEnd = Math.max(0, Math.min(content.length, p)); updateCursor(); } }); }
+  function lineBounds(pos) {
+    const start = content.lastIndexOf("\n", pos - 1) + 1;
+    let end = content.indexOf("\n", pos); if (end === -1) end = content.length;
+    return { start, end };
   }
   function handleVi(e) {
-    if (viMode === "insert") { if (e.key === "Escape") { e.preventDefault(); viMode = "normal"; return true; } return false; }
-    // normal
-    if (e.key === "i") { e.preventDefault(); viMode = "insert"; return true; }
-    if (e.key === "a") { e.preventDefault(); if (taEl) taEl.selectionStart++; viMode = "insert"; return true; }
-    if (e.key === "o") { e.preventDefault(); const p = taEl.selectionStart; content = content.slice(0,p)+"\n"+content.slice(p); onEdit(content); viMode = "insert"; return true; }
-    if (e.key === "x") { e.preventDefault(); const p = taEl.selectionStart; content = content.slice(0,p)+content.slice(p+1); onEdit(content); return true; }
-    if (e.key.length === 1) { e.preventDefault(); return true; } // 그 외 입력 차단
-    return false;
+    const ta = taEl;
+    if (viMode === "insert") {
+      if (e.key === "Escape") { e.preventDefault(); viMode = "normal"; return true; }
+      return false; // 인서트 모드는 일반 입력 허용
+    }
+    if (viMode === "command") {
+      if (e.key === "Enter") { e.preventDefault(); runViCommand(viCommand); viCommand = ""; viMode = "normal"; return true; }
+      if (e.key === "Escape") { e.preventDefault(); viCommand = ""; viMode = "normal"; return true; }
+      if (e.key === "Backspace") { e.preventDefault(); viCommand = viCommand.slice(0, -1); return true; }
+      if (e.key.length === 1) { e.preventDefault(); viCommand += e.key; return true; }
+      return true;
+    }
+    // ── normal 모드 ──
+    e.preventDefault();
+    const pos = ta.selectionStart;
+    const { start, end } = lineBounds(pos);
+    switch (e.key) {
+      case ":": viMode = "command"; viCommand = ":"; break;
+      case "i": viMode = "insert"; break;
+      case "a": setCaret(pos + 1); viMode = "insert"; break;
+      case "A": setCaret(end); viMode = "insert"; break;
+      case "I": setCaret(start); viMode = "insert"; break;
+      case "h": setCaret(pos - 1); break;
+      case "l": setCaret(pos + 1); break;
+      case "j": { // 아래 줄 같은 칼럼
+        const col = pos - start;
+        if (end < content.length) { const ns = end + 1; const ne = (content.indexOf("\n", ns) === -1 ? content.length : content.indexOf("\n", ns)); setCaret(Math.min(ns + col, ne)); }
+        break;
+      }
+      case "k": { // 위 줄 같은 칼럼
+        const col = pos - start;
+        if (start > 0) { const ps = content.lastIndexOf("\n", start - 2) + 1; const pe = start - 1; setCaret(Math.min(ps + col, pe)); }
+        break;
+      }
+      case "0": setCaret(start); break;
+      case "$": setCaret(end); break;
+      case "x": { // 커서 위치 글자 삭제, 커서는 제자리(줄 끝이면 한 칸 왼쪽)
+        if (pos < end) { content = content.slice(0, pos) + content.slice(pos + 1); onEdit(content); setCaret(pos); }
+        break;
+      }
+      case "o": { content = content.slice(0, end) + "\n" + content.slice(end); onEdit(content); setCaret(end + 1); viMode = "insert"; break; }
+      case "O": { content = content.slice(0, start) + "\n" + content.slice(start); onEdit(content); setCaret(start); viMode = "insert"; break; }
+      case "d": {
+        if (_lastKey === "d") { // dd: 줄 삭제
+          const delEnd = end < content.length ? end + 1 : end;
+          content = content.slice(0, start) + content.slice(delEnd); onEdit(content); setCaret(start);
+          _lastKey = ""; return true;
+        }
+        _lastKey = "d"; return true;
+      }
+      default: break;
+    }
+    _lastKey = e.key;
+    return true;
+  }
+  function runViCommand(cmd) {
+    const c = cmd.replace(/^:/, "").trim().toLowerCase();
+    // 저장/종료 계열만 의미 있게 처리(단일 파일 에디터라 q는 닫기 대용)
+    if (["w", "wq", "x", "wq!", "x!"].includes(c)) {
+      if (curProject && curFile) cn.storage.writeText(filePath(curProject, curFile), content);
+      output = `저장했습니다: ${curFile}`;
+    } else if (["q", "q!"].includes(c)) {
+      output = "(단일 파일 편집 화면이라 닫기는 탭에서 합니다)";
+    } else {
+      output = `알 수 없는 명령: :${c}`;
+    }
   }
 
   // 문법 하이라이팅(간단): 키워드/문자열/주석/숫자
@@ -224,22 +288,33 @@
   };
   function esc(s) { return s.replace(/[&<>]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c])); }
   function highlight(code, lang) {
+    // 토큰을 순서대로 추출해 placeholder로 치환한 뒤, 마지막에 한 번에 span으로 감싼다.
+    // 이렇게 하면 숫자 정규식이 이미 만든 태그 속성(class="nm" 등)을 건드리지 않는다.
+    const tokens = [];
     let h = esc(code);
-    // 주석
-    if (lang === "py") h = h.replace(/(#.*)/g, '<span class="cm">$1</span>');
-    else if (lang === "hs") h = h.replace(/(--.*)/g, '<span class="cm">$1</span>');
-    else h = h.replace(/(\/\/.*)/g, '<span class="cm">$1</span>');
+    const stash = (cls, text) => { tokens.push({ cls, text }); return `\u0000T${tokens.length-1}E\u0000`; };
+
+    // 주석(언어별)
+    if (lang === "py") h = h.replace(/#.*/g, (m) => stash("cm", m));
+    else if (lang === "hs") h = h.replace(/--.*/g, (m) => stash("cm", m));
+    else h = h.replace(/\/\/.*/g, (m) => stash("cm", m));
     // 문자열
-    h = h.replace(/("[^"]*"|'[^']*')/g, '<span class="st">$1</span>');
-    // 숫자
-    h = h.replace(/\b(\d+\.?\d*)\b/g, '<span class="nm">$1</span>');
+    h = h.replace(/"[^"]*"|'[^']*'/g, (m) => stash("st", m));
     // 키워드
     const kws = KEYWORDS[lang] || [];
     if (kws.length) {
       const re = new RegExp(`\\b(${kws.join("|")})\\b`, "g");
-      h = h.replace(re, '<span class="kw">$1</span>');
+      h = h.replace(re, (m) => stash("kw", m));
     }
-    return h + "\n"; // 마지막 줄 높이 보정
+    // 숫자 (placeholder는 \u0000T..E\u0000 형태라 일반 숫자와 겹치지 않음)
+    h = h.replace(/\b\d+\.?\d*\b/g, (m) => stash("nm", m));
+
+    // placeholder 복원
+    h = h.replace(/\u0000T(\d+)E\u0000/g, (_, i) => {
+      const t = tokens[Number(i)];
+      return `<span class="${t.cls}">${t.text}</span>`;
+    });
+    return h + "\n";
   }
   $: hlLang = langOf(curFile);
   $: highlighted = curFile ? highlight(content, hlLang) : "";
@@ -265,10 +340,6 @@
             <button class="addf" on:click={() => startAddFile(p.name)} title="새 파일">+</button>
           {/if}
         </div>
-        {#if addingFile === p.name}
-          <input class="inline indented" bind:value={newFileName} placeholder="파일명 (예: main.c)"
-            on:keydown={(e) => e.key === "Enter" && commitFile()} on:blur={commitFile} autofocus />
-        {/if}
         {#each p.files as f (f)}
           {#if renaming?.type === "file" && renaming.p === p.name && renaming.f === f}
             <input class="inline indented" bind:value={renameValue} on:keydown={(e) => e.key === "Enter" && commitRename()} on:blur={commitRename} autofocus />
@@ -277,6 +348,10 @@
                  on:click={() => openFile(p.name, f)} on:contextmenu={(e) => openCtx(e, "file", p.name, f)}>{f}</div>
           {/if}
         {/each}
+        {#if addingFile === p.name}
+          <input class="inline indented" bind:value={newFileName} placeholder="파일명 (예: main.c)"
+            on:keydown={(e) => e.key === "Enter" && commitFile()} on:blur={commitFile} autofocus />
+        {/if}
       {/each}
     {/if}
   </aside>
@@ -289,8 +364,9 @@
         <button on:click={buildOnly}>빌드</button>
         <button on:click={runOnly}>실행</button>
         <button class="cmdset" on:click={() => (showCmdSettings = !showCmdSettings)} title="명령 설정">⚙</button>
-        {#if !viEnabled}<button class="vi" on:click={enableVi}>vi 키맵</button>
-        {:else}<span class="vi-mode">vi: {viMode === "normal" ? "NORMAL" : "INSERT"}</span>{/if}
+        {#if viOn}
+          <span class="vi-mode">vi: {viMode === "normal" ? "NORMAL" : viMode === "command" ? viCommand : "INSERT"}</span>
+        {/if}
       </div>
 
       {#if showCmdSettings}
@@ -331,17 +407,6 @@
     {/if}
   </div>
 </div>
-
-{#if viGate}
-  <div class="modal-bg" on:click={() => (viGate = false)}>
-    <div class="modal" on:click|stopPropagation>
-      <h3>vi 키맵 활성화</h3>
-      <p>vi에 익숙한지 확인합니다. vi에서 저장하고 종료하는 명령을 입력하세요.</p>
-      <input bind:value={viGateInput} on:keydown={(e) => e.key === "Enter" && checkGate()} autofocus />
-      <div class="modal-actions"><button class="ok" on:click={checkGate}>확인</button><button on:click={() => (viGate = false)}>취소</button></div>
-    </div>
-  </div>
-{/if}
 
 {#if ctx}
   <div class="ctxmenu" style="left:{ctx.x}px; top:{ctx.y}px">

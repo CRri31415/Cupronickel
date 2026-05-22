@@ -83,6 +83,6 @@ export const ipc = {
   deletePath: (rel) => invoke("delete_path", { rel }),
   makeDir: (rel) => invoke("make_dir", { rel }),
   openDataFolder: () => invoke("open_data_folder"),
-  runBuild: (project, program, args) => invoke("run_build", { project, program, args }),
+  runBuild: (project, cmdLine) => invoke("run_build", { project, cmdLine }),
   runInTerminal: (project, cmdLine) => invoke("run_in_terminal", { project, cmdLine }),
 };
