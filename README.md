@@ -1,4 +1,4 @@
-# Cupronickel 0.2.0-alpha
+# Cupronickel
 
 Obsidian · Anki · Geany에서 영향을 받은 모듈형 통합 생산성 소프트웨어.
 **Tauri + Svelte + Vite** 기반. 오프라인 우선. Windows 대상(Ubuntu 가능).
@@ -95,12 +95,3 @@ Ubuntu는 `bundle/deb/` 또는 `bundle/appimage/`.
 ## 코드 흐름
 
 `docs/ARCHITECTURE.md` 참고.
-
-## 기획서에 없던 추가 사항 (명시 의무)
-
-앱 자체 기능은 기획서에 없는 것을 추가하지 않았습니다. 빌드/배포를 위해 추가한 것:
-
-- 원클릭 빌드 스크립트(`BUILD-INSTALLER.bat`, `build-installer.ps1`)와 CI(`.github/workflows/build-installer.yml`).
-  — "AI가 설치 프로그램을 빌드해 제공" 요구를, 리눅스 환경에서 Windows .exe를 직접 못 만드는 제약 하에
-  실제 설치 파일을 자동 생성하는 방법으로 충족한 것입니다.
-- 합리적 기본값: 탭 유휴 전환 5분(`tabs.js`의 `IDLE_MS`), 메인 부착 메모 16개 제한(기획서 수치).
